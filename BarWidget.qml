@@ -60,15 +60,16 @@ BarWidget {
     tooltipText: "OmaDrop · esquerdo: shelf · direito: configurações · meio: limpar"
 
     onPressed: function(b) {
-      var shellObj = root.bar ? root.bar.shell : null
-      if (!shellObj) return
+      // Bar.run is the first-party contract (see omarchy.microphone); the
+      // bar's `shell` property is not guaranteed to be wired for plugins.
+      if (!root.bar || typeof root.bar.run !== "function") return
 
       if (b === Qt.RightButton)
-        shellObj.summon(root.moduleName, '{"view":"settings"}')
+        root.bar.run("omarchy-shell omadrop settings")
       else if (b === Qt.MiddleButton)
-        shellObj.call(root.moduleName, "clear", "")
+        root.bar.run("omarchy-shell omadrop clear")
       else
-        shellObj.toggle(root.moduleName)
+        root.bar.run("omarchy-shell omadrop toggle")
     }
   }
 
