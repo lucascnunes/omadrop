@@ -47,6 +47,11 @@ Item {
   function requestClose() { if (controller) controller.dismiss() }
 
   readonly property var items: controller ? controller.activeItems : []
+
+  // Bumped by the controller when the UI language changes: static texts
+  // reference langRev so their bindings re-evaluate with the new locale
+  // (Strings.t alone is not reactive).
+  property int langRev: 0
   readonly property bool dragInProgress: draggingZone || activeDragTile !== null
 
   // Tile being dragged, if any — Esc cancels the drag and returns the tile
@@ -275,8 +280,8 @@ Item {
               Text {
                 id: countLabel
                 anchors.centerIn: parent
-                text: panelRoot.items.length === 1 ? Strings.t("oneItem")
-                                                   : Strings.t("manyItems").replace("%1", String(panelRoot.items.length))
+                text: (panelRoot.langRev >= 0 ? "" : "") + (panelRoot.items.length === 1 ? Strings.t("oneItem")
+                                                   : Strings.t("manyItems").replace("%1", String(panelRoot.items.length)))
                 color: Color.popups.text
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
@@ -291,13 +296,13 @@ Item {
 
             IconChip {
               glyph: "󰒓"
-              tooltipText: Strings.t("gearTooltip")
+              tooltipText: (panelRoot.langRev >= 0 ? "" : "") + Strings.t("gearTooltip")
               onClicked: if (panelRoot.controller) panelRoot.controller.openSettingsPopout()
             }
 
             IconChip {
               glyph: "󰅖"
-              tooltipText: Strings.t("closeTooltip")
+              tooltipText: (panelRoot.langRev >= 0 ? "" : "") + Strings.t("closeTooltip")
               onClicked: panelRoot.requestClose()
             }
           }
@@ -352,14 +357,14 @@ Item {
             AllDragHandle { visible: panelRoot.items.length > 0 }
 
             ChipButton {
-              label: Strings.t("newShelf")
-              tooltipText: Strings.t("newShelfTooltip")
+              label: (panelRoot.langRev >= 0 ? "" : "") + Strings.t("newShelf")
+              tooltipText: (panelRoot.langRev >= 0 ? "" : "") + Strings.t("newShelfTooltip")
               onClicked: if (controller) controller.archiveCurrent()
             }
 
             ChipButton {
-              label: Strings.t("clearShelf")
-              tooltipText: Strings.t("clearShelfTooltip")
+              label: (panelRoot.langRev >= 0 ? "" : "") + Strings.t("clearShelf")
+              tooltipText: (panelRoot.langRev >= 0 ? "" : "") + Strings.t("clearShelfTooltip")
               enabled: panelRoot.items.length > 0
               onClicked: if (controller) controller.clearActive()
             }
@@ -370,8 +375,8 @@ Item {
           Text {
             width: parent.width
             text: panelRoot.items.length > 0
-                  ? Strings.t("dragHintWithItems")
-                  : Strings.t("dragHintEmpty")
+                  ? (panelRoot.langRev >= 0 ? "" : "") + Strings.t("dragHintWithItems")
+                  : (panelRoot.langRev >= 0 ? "" : "") + Strings.t("dragHintEmpty")
             color: Qt.darker(Color.popups.text, 1.6)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -710,7 +715,7 @@ Item {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        text: Strings.t("dragAll")
+        text: (panelRoot.langRev >= 0 ? "" : "") + Strings.t("dragAll")
         color: Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
@@ -763,7 +768,7 @@ Item {
 
     PanelToolTip {
       visible: allMouse.containsMouse
-      text: Strings.t("dragAllTooltip")
+      text: (panelRoot.langRev >= 0 ? "" : "") + Strings.t("dragAllTooltip")
       fontFamily: Style.font.family
     }
   }
@@ -786,7 +791,7 @@ Item {
       Text {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
-        text: Strings.t("emptyHint")
+        text: (panelRoot.langRev >= 0 ? "" : "") + Strings.t("emptyHint")
         color: Qt.darker(Color.popups.text, 1.5)
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
