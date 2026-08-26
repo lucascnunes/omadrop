@@ -15,7 +15,7 @@ var DEFAULTS = {
   hotkeyOpen: "SUPER SHIFT, A"
 }
 
-var POSITIONS = ["cursor", "topLeft", "topRight", "bottomLeft", "bottomRight"]
+var POSITIONS = ["cursor", "topLeft", "topCenter", "topRight", "bottomLeft", "bottomCenter", "bottomRight"]
 var REVERSALS_MIN = 3
 var REVERSALS_MAX = 7
 
@@ -348,6 +348,9 @@ function clearActive(state) {
 function archiveCurrent(state, opts) {
   var maxShelves = clampInt(opts && opts.maxShelves, 3, 100, 20)
   var shelf = ensureActiveShelf(state)
+  // An empty shelf has nothing to file away: stay on it instead of
+  // polluting the history with empty entries.
+  if (shelf.items.length === 0) return state
   shelf.archivedAt = Date.now()
   shelf.updatedAt = Date.now()
 
@@ -470,6 +473,8 @@ function shelfAnchor(position, monitor, cursor, cardWidth, cardHeight, margin) {
   var lx = gx - mx
   var ly = gy - my
 
+  if (position === "topCenter") return clampLocal((mw - w) / 2, pad)
+  if (position === "bottomCenter") return clampLocal((mw - w) / 2, mh - h - pad)
   if (position === "topLeft") return clampLocal(pad, pad)
   if (position === "topRight") return clampLocal(mw - w - pad, pad)
   if (position === "bottomLeft") return clampLocal(pad, mh - h - pad)

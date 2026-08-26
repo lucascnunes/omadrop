@@ -147,6 +147,16 @@ t("archiveCurrent opens a fresh shelf and keeps history", function() {
   eq(M.activeShelf(st).items.length, 1)
 })
 
+t("archiveCurrent is a no-op on an empty shelf", function() {
+  var st = M.emptyState()
+  M.addItems(st, ["/a.txt"], {})
+  M.clearActive(st)
+  var before = M.serializeState(st)
+  M.archiveCurrent(st, {})
+  eq(M.serializeState(st), before, "empty shelf must not be archived")
+  eq(M.activeShelf(st).items.length, 0)
+})
+
 t("deleteShelf promotes another working shelf", function() {
   var st = M.emptyState()
   M.addItems(st, ["/a.txt"], {})
@@ -247,6 +257,16 @@ t("shelfAnchor clamps cursor mode inside the monitor", function() {
   ok(pos.x >= 10 && pos.x <= 1280 - 400 - 10, "x clamped: " + pos.x)
   ok(pos.y >= 10 && pos.y <= 800 - 400 - 10, "y clamped: " + pos.y)
   ok(pos.x < 3195 - 1920, "biased up-left of the pointer")
+})
+
+t("shelfAnchor centers on top/bottom", function() {
+  var mon = { x: 0, y: 0, width: 1000, height: 1000 }
+  var top = M.shelfAnchor("topCenter", mon, null, 300, 300, 12)
+  eq(top.x, 350)
+  eq(top.y, 12)
+  var bottom = M.shelfAnchor("bottomCenter", mon, null, 300, 300, 12)
+  eq(bottom.x, 350)
+  eq(bottom.y, 688)
 })
 
 t("shelfAnchor honors corners", function() {

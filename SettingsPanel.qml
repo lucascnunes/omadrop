@@ -198,10 +198,12 @@ Panel {
           Repeater {
             model: [
               { key: "cursor", label: Strings.t("posCursor") },
-              { key: "topLeft", label: "󰁛" },
-              { key: "topRight", label: "󰁜" },
-              { key: "bottomLeft", label: "󰁝" },
-              { key: "bottomRight", label: "󰁘" }
+              { key: "topLeft", label: "↖" },
+              { key: "topCenter", label: "↑" },
+              { key: "topRight", label: "↗" },
+              { key: "bottomLeft", label: "↙" },
+              { key: "bottomCenter", label: "↓" },
+              { key: "bottomRight", label: "↘" }
             ]
 
             delegate: PositionChip {
