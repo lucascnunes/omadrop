@@ -69,10 +69,11 @@ Disponíveis no painel (botão 󰤨) e persistidas no seu `shell.json`
 |---|---|---|
 | `shakeEnabled` | `true` | Liga/desliga a detecção de sacudida |
 | `shakeReversals` | `4` | Quantas reversões de direção contam como shake (**menos = mais sensível**) |
-| `shelfPosition` | `cursor` | `cursor`, `topLeft`, `topRight`, `bottomLeft`, `bottomRight` |
+| `shelfPosition` | `cursor` | `cursor`, `topLeft`, `topCenter`, `topRight`, `bottomLeft`, `bottomCenter`, `bottomRight` |
 | `maxItems` | `20` | Limite de itens da shelf ativa |
 | `showNotifications` | `true` | Toasts de "N arquivos na shelf" |
-| `hotkeyCapture` / `hotkeyOpen` | display | Só documentação visual; aplique no bindings.lua |
+| `language` | `auto` | Idioma da interface: `auto` (segue o sistema), `en`, `pt` |
+| `hotkeyCapture` / `hotkeyOpen` | `SUPER SHIFT, D` / `SUPER SHIFT, A` | Combos editáveis; o chip de copiar do painel emite a linha `o.bind(...)` correspondente |
 
 ### Histórico de shelves ("Nova shelf")
 

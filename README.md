@@ -70,10 +70,11 @@ Available in the panel (the 󰤨 button) and persisted in your `shell.json`
 |---|---|---|
 | `shakeEnabled` | `true` | Enables/disables shake detection |
 | `shakeReversals` | `4` | Direction reversals that count as a shake (**lower = more sensitive**) |
-| `shelfPosition` | `cursor` | `cursor`, `topLeft`, `topRight`, `bottomLeft`, `bottomRight` |
+| `shelfPosition` | `cursor` | `cursor`, `topLeft`, `topCenter`, `topRight`, `bottomLeft`, `bottomCenter`, `bottomRight` |
 | `maxItems` | `20` | Item cap for the active shelf |
 | `showNotifications` | `true` | "N files shelved" toasts |
-| `hotkeyCapture` / `hotkeyOpen` | display only | Visual documentation; apply in bindings.lua |
+| `language` | `auto` | UI language: `auto` (follow system locale), `en`, `pt` |
+| `hotkeyCapture` / `hotkeyOpen` | `SUPER SHIFT, D` / `SUPER SHIFT, A` | Editable combos; the panel's copy chip emits the matching `o.bind(...)` line |
 
 ### Shelf history ("New shelf")
 
