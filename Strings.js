@@ -30,6 +30,10 @@ var TABLE = {
     hotkeyOpen: "Open the shelf",
     copyLine: "Copy bindings.lua line",
     sectionGeneral: "GENERAL",
+    languageRow: "Language",
+    langAuto: "Auto",
+    langEn: "English",
+    langPt: "Português",
     notificationsRow: "Capture notifications",
     limitRow: "Shelf limit",
     limitCaption: "Overflowing oldest items are dropped",
@@ -76,6 +80,10 @@ var TABLE = {
     hotkeyOpen: "Abrir a shelf",
     copyLine: "Copiar linha p/ bindings.lua",
     sectionGeneral: "GERAL",
+    languageRow: "Idioma",
+    langAuto: "Auto",
+    langEn: "English",
+    langPt: "Português",
     notificationsRow: "Notificações ao capturar",
     limitRow: "Limite da shelf",
     limitCaption: "Itens excedentes são descartados do início",
@@ -107,7 +115,15 @@ function localeName() {
   }
 }
 
+// Optional manual override: "en" | "pt" ("" = follow the system locale).
+var languageOverride = ""
+
+function setLanguage(code) {
+  languageOverride = (code === "en" || code === "pt") ? code : ""
+}
+
 function code() {
+  if (languageOverride !== "") return languageOverride
   return localeName().indexOf("pt") === 0 ? "pt" : "en"
 }
 

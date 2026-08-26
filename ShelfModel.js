@@ -11,6 +11,7 @@ var DEFAULTS = {
   shelfPosition: "cursor",  // cursor | topLeft | topRight | bottomLeft | bottomRight
   maxItems: 20,
   showNotifications: true,
+  language: "auto",         // auto | en | pt
   hotkeyCapture: "SUPER SHIFT, D",
   hotkeyOpen: "SUPER SHIFT, A"
 }
@@ -55,6 +56,7 @@ function normalizeSettings(entry) {
     shelfPosition: POSITIONS.indexOf(src.shelfPosition) !== -1 ? src.shelfPosition : DEFAULTS.shelfPosition,
     maxItems: clampInt(src.maxItems, 1, 100, DEFAULTS.maxItems),
     showNotifications: boolOf(src.showNotifications, DEFAULTS.showNotifications),
+    language: ["auto", "en", "pt"].indexOf(src.language) !== -1 ? src.language : DEFAULTS.language,
     hotkeyCapture: stringOf(src.hotkeyCapture, DEFAULTS.hotkeyCapture),
     hotkeyOpen: stringOf(src.hotkeyOpen, DEFAULTS.hotkeyOpen)
   }

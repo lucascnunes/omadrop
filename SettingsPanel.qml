@@ -24,6 +24,11 @@ Panel {
   property var localSettingsOverride: null
   readonly property var effectiveSettings:
     ShelfModel.normalizeSettings(localSettingsOverride || root.settings)
+  onEffectiveSettingsChanged: Strings.setLanguage(effectiveSettings.language)
+  onOpenedChanged: {
+    Strings.setLanguage(effectiveSettings.language)
+    if (opened) root.pollState()
+  }
 
   function persistSettings(values) {
     var entry = ShelfModel.cloneJson(root.settings) || {}
@@ -71,8 +76,6 @@ Panel {
     triggeredOnStart: true
     onTriggered: root.pollState()
   }
-  onOpenedChanged: if (root.opened) root.pollState()
-
   // ---- helpers ---------------------------------------------------------------
   function runIpc(args) {
     if (root.bar && typeof root.bar.run === "function")
@@ -234,6 +237,42 @@ Panel {
         }
 
         SectionLabel { title: Strings.t("sectionGeneral") }
+
+        Row {
+          width: parent.width
+          spacing: Style.space(10)
+
+          Text {
+            width: parent.width - langRow.width - parent.spacing
+            anchors.verticalCenter: parent.verticalCenter
+            text: Strings.t("languageRow")
+            color: Color.popups.text
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            elide: Text.ElideRight
+          }
+
+          Row {
+            id: langRow
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(6)
+
+            Repeater {
+              model: [
+                { key: "auto", label: Strings.t("langAuto") },
+                { key: "en", label: Strings.t("langEn") },
+                { key: "pt", label: Strings.t("langPt") }
+              ]
+
+              delegate: PositionChip {
+                positionKey: modelData.key
+                positionLabel: modelData.label
+                active: root.effectiveSettings.language === modelData.key
+                onSelectPosition: function(key) { root.persistSettings({ language: key }) }
+              }
+            }
+          }
+        }
 
         Row {
           width: parent.width

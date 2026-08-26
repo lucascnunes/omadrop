@@ -44,6 +44,11 @@ BarWidget {
     onExited: root.itemCount = ShelfModel.countActiveItemsText(counterOut.text)
   }
 
+  readonly property string barTooltip: {
+    Strings.setLanguage(root.settings.language)
+    return Strings.t("barTooltip")
+  }
+
   function recount() {
     counter.command = ["bash", "-c", 'cat "$0" 2>/dev/null || true', root.statePath]
     counter.running = true
@@ -104,7 +109,7 @@ BarWidget {
     text: "󰏗"
     labelVisible: true
     hasVisualContent: true
-    tooltipText: Strings.t("barTooltip")
+    tooltipText: root.barTooltip
 
     onPressed: function(b) {
       if (!root.bar || typeof root.bar.run !== "function") return

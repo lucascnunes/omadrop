@@ -132,6 +132,22 @@ and Python needs no build toolchain in a git-distributed plugin. Documented
 future upgrades: an in-shell detector via `Quickshell.Io.Socket` (saves
 ~20 MB RSS) or a native Hyprland C++ plugin (pointer events and button state).
 
+## Uninstall
+
+```bash
+omarchy plugin remove lucas.omadrop --yes
+```
+
+Then clean up what the plugin leaves behind:
+
+```bash
+rm -rf ~/.local/state/omadrop          # shelf history, logs, daemon lock
+```
+
+And remove the two `bind = ... omadrop ...` lines you added to
+`~/.config/hypr/bindings.lua`, followed by `omarchy reload hyprland`
+(or `omarchy restart shell`).
+
 ## Support
 
 OmaDrop is free and open source. If it saves you time every day, consider

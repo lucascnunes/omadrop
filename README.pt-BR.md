@@ -131,6 +131,22 @@ toolchain de build num plugin distribuído por git. Upgrades futuros
 documentados: detector dentro do shell via `Quickshell.Io.Socket` (economiza
 ~20 MB RSS) ou plugin C++ nativo do Hyprland (eventos/botões do ponteiro).
 
+## Desinstalação
+
+```bash
+omarchy plugin remove lucas.omadrop --yes
+```
+
+Depois limpe o que o plugin deixou para trás:
+
+```bash
+rm -rf ~/.local/state/omadrop          # histórico de shelves, logs, lock do daemon
+```
+
+E remova as duas linhas `bind = ... omadrop ...` que você adicionou no
+`~/.config/hypr/bindings.lua`, seguido de `omarchy reload hyprland`
+(ou `omarchy restart shell`).
+
 ## Apoie o projeto
 
 O OmaDrop é gratuito e de código aberto. Se ele te economiza tempo todo dia,

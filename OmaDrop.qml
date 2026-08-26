@@ -394,7 +394,10 @@ Item {
     }
   }
 
-  onSettingsChanged: syncDaemon()
+  onSettingsChanged: {
+    Strings.setLanguage(root.settings.language)
+    syncDaemon()
+  }
   onSuspendedChanged: syncDaemon()
 
   // ---- small helpers ------------------------------------------------------------------
@@ -457,6 +460,7 @@ Item {
   // ---- wiring -----------------------------------------------------------------------------
   Component.onCompleted: {
     Qt.callLater(function() {
+      Strings.setLanguage(root.settings.language)
       syncDaemon()
       // FileView may still be loading; adopt whatever is there by then.
       if (root.state.shelves.length === 0) root.adoptState(stateFile.text())
