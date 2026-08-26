@@ -11,6 +11,7 @@ spawns in the hot loop.
 """
 
 import argparse
+import fcntl
 import math
 import os
 import signal
@@ -72,6 +73,18 @@ def build_parser():
 
 def main() -> int:
     args = build_parser().parse_args()
+
+    # Singleton: shell restarts used to orphan older daemons, and every
+    # orphan fired its own capture on the same shake.
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    lock_dir = os.path.join(runtime_dir, "omadrop")
+    os.makedirs(lock_dir, exist_ok=True)
+    lock_file = open(os.path.join(lock_dir, "shaked.lock"), "w")
+    try:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("another omadrop-shaked holds the lock; exiting", file=sys.stderr)
+        return 0
 
     sock_path = args.socket
     if not sock_path:

@@ -363,6 +363,18 @@ Item {
     onTriggered: if (root.wantDaemon) shakeDaemon.running = true
   }
 
+  // Shell restarts orphan older daemons (they hold their own flock after the
+  // next fix, but stale-argument ones must still go before ours starts).
+  Process {
+    id: daemonReaper
+    stdout: StdioCollector {}
+  }
+
+  function reapDaemons() {
+    daemonReaper.command = ["bash", "-c", 'pkill -f "omadrop-shake[d]" 2>/dev/null || true']
+    daemonReaper.running = true
+  }
+
   function syncDaemon() {
     var want = root.settings.shakeEnabled && !root.suspended
     var args = [
@@ -376,7 +388,10 @@ Item {
     root.wantDaemon = want
     shakeDaemon.command = args
     shakeDaemon.running = false
-    if (want) daemonRestart.restart()
+    if (want) {
+      root.reapDaemons()
+      daemonRestart.restart()
+    }
   }
 
   onSettingsChanged: syncDaemon()

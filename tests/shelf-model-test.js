@@ -157,17 +157,37 @@ t("archiveCurrent is a no-op on an empty shelf", function() {
   eq(M.activeShelf(st).items.length, 0)
 })
 
-t("deleteShelf promotes another working shelf", function() {
+t("reopenShelf archives the previously working shelf", function() {
   var st = M.emptyState()
   M.addItems(st, ["/a.txt"], {})
   var first = M.activeShelf(st).id
   M.archiveCurrent(st, {})
   var second = M.activeShelf(st).id
 
-  // Two working shelves: reopening the first leaves the second working too.
   ok(M.reopenShelf(st, first))
-  ok(M.deleteShelf(st, first))
-  eq(st.activeShelfId, second, "promotes the remaining working shelf")
+  eq(st.activeShelfId, first)
+  ok(M.findShelf(st, second).archivedAt !== null, "other working shelf archived")
+  var working = 0
+  for (var i = 0; i < st.shelves.length; i++)
+    if (st.shelves[i].archivedAt === null) working++
+  eq(working, 1, "single working shelf invariant")
+})
+
+t("normalizeWorkingShelves merges stray working shelves", function() {
+  var st = M.emptyState()
+  M.addItems(st, ["/a.txt"], {})
+  // Simulate corrupted state: a second working shelf holding the same file
+  // plus another one.
+  st.shelves.push({
+    id: "rogue", createdAt: Date.now(), updatedAt: Date.now(), archivedAt: null,
+    items: [M.makeItem("/a.txt"), M.makeItem("/b.txt")]
+  })
+  M.addItems(st, ["/c.txt"], {}) // ensureActiveShelf normalizes first
+  eq(M.totalActiveCount(st), 3, "merged a+b+c without duplicates")
+  var working = 0
+  for (var j = 0; j < st.shelves.length; j++)
+    if (st.shelves[j].archivedAt === null) working++
+  eq(working, 1, "invariant restored")
 })
 
 t("deleteShelf allows zero working shelves until the next capture", function() {

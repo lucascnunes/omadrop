@@ -251,6 +251,7 @@ function deserializeState(text) {
     }
   }
   state.activeShelfId = active
+  normalizeWorkingShelves(state)
   return state
 }
 
@@ -281,7 +282,46 @@ function activeShelf(state) {
   return null
 }
 
+// At most one working (non-archived) shelf may exist. Strays (stale state,
+// restart races) are merged into the winner — the shelf activeShelfId points
+// at, else the newest non-empty, else the newest — and dropped.
+function normalizeWorkingShelves(state) {
+  if (!state || !Array.isArray(state.shelves)) return
+  var working = []
+  for (var i = 0; i < state.shelves.length; i++)
+    if (state.shelves[i].archivedAt === null) working.push(state.shelves[i])
+  if (working.length === 0) return
+  if (working.length === 1) { state.activeShelfId = working[0].id; return }
+
+  var winner = null
+  for (var w = 0; w < working.length; w++)
+    if (working[w].id === state.activeShelfId) { winner = working[w]; break }
+  if (!winner) {
+    var bestScore = -1
+    for (var j = 0; j < working.length; j++) {
+      var score = (working[j].items.length > 0 ? 1e13 : 0) + (working[j].updatedAt || 0)
+      if (score > bestScore) { bestScore = score; winner = working[j] }
+    }
+  }
+
+  var seen = {}
+  for (var k = 0; k < winner.items.length; k++) seen[winner.items[k].uri] = true
+  var kept = []
+  for (var m = 0; m < state.shelves.length; m++) {
+    var sh = state.shelves[m]
+    if (sh.archivedAt !== null || sh === winner) { kept.push(sh); continue }
+    for (var n = 0; n < sh.items.length; n++) {
+      var it = sh.items[n]
+      if (!seen[it.uri]) { seen[it.uri] = true; winner.items.push(it) }
+    }
+    // Losers are dropped: their items live on inside the winner.
+  }
+  state.shelves = kept
+  state.activeShelfId = winner.id
+}
+
 function ensureActiveShelf(state) {
+  normalizeWorkingShelves(state)
   var shelf = activeShelf(state)
   if (shelf) return shelf
   shelf = { id: shortId("s"), createdAt: Date.now(), updatedAt: Date.now(), archivedAt: null, items: [] }
@@ -379,6 +419,14 @@ function archiveCurrent(state, opts) {
 function reopenShelf(state, id) {
   var shelf = findShelf(state, id)
   if (!shelf) return false
+  // Single-working invariant: whatever else was working goes to history.
+  for (var i = 0; i < state.shelves.length; i++) {
+    var s = state.shelves[i]
+    if (s.id !== id && s.archivedAt === null) {
+      s.archivedAt = Date.now()
+      s.updatedAt = Date.now()
+    }
+  }
   shelf.archivedAt = null
   shelf.updatedAt = Date.now()
   state.activeShelfId = id
@@ -519,6 +567,8 @@ if (typeof module !== "undefined" && module.exports) {
     deserializeState: deserializeState,
     serializeState: serializeState,
     activeShelf: activeShelf,
+    findShelf: findShelf,
+    normalizeWorkingShelves: normalizeWorkingShelves,
     ensureActiveShelf: ensureActiveShelf,
     addItems: addItems,
     removeItem: removeItem,
