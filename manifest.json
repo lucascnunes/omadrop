@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "lucas.omadrop",
+  "name": "OmaDrop",
+  "version": "0.1.0",
+  "author": "Lucas Nunes",
+  "description": "Dropzone flutuante estilo Dropover: sacuda o mouse sobre uma seleção de arquivos (ou use um atalho) para guardar na shelf e arrastar depois para qualquer lugar.",
+  "kinds": [
+    "bar-widget",
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "panel": "OmaDrop.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaDrop",
+    "description": "Dropzone flutuante estilo Dropover",
+    "category": "Files",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

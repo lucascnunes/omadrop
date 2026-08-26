@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""OmaDrop shake detector.
+
+Polls the Hyprland cursor position over IPC socket1 at high frequency and
+fires a command when it sees a hand-drawn "shake": rapid back-and-forth
+reversals in place. Swipes, window drags and travel across the screen are
+deliberately ignored (long net translation vs. short oscillation path).
+
+Designed to cost ~nothing: one tiny AF_UNIX request per sample, no process
+spawns in the hot loop.
+"""
+
+import argparse
+import math
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+from collections import deque
+
+running = True
+
+
+def _stop(_signum, _frame):
+    global running
+    running = False
+
+
+signal.signal(signal.SIGTERM, _stop)
+signal.signal(signal.SIGINT, _stop)
+
+
+def cursor_position(sock_path: str) -> tuple[float, float]:
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(0.05)
+    try:
+        s.connect(sock_path)
+        s.sendall(b"cursorpos")
+        buf = b""
+        while True:
+            chunk = s.recv(64)
+            if not chunk:
+                break
+            buf += chunk
+        text = buf.decode(errors="ignore").strip()
+        if "," not in text:
+            raise ValueError(f"unexpected reply: {text!r}")
+        x, y = text.split(",", 1)
+        return float(x), float(y)
+    finally:
+        s.close()
+
+
+def build_parser():
+    p = argparse.ArgumentParser(description="OmaDrop shake detector")
+    p.add_argument("--socket", default="", help="Hyprland .socket.sock path")
+    p.add_argument("--interval-ms", type=int, default=12)
+    p.add_argument("--window-ms", type=int, default=420)
+    p.add_argument("--reversals", type=int, default=4,
+                   help="direction reversals required to fire (higher = less sensitive)")
+    p.add_argument("--min-speed", type=float, default=650.0, help="px/s floor for energetic motion")
+    p.add_argument("--deadzone", type=float, default=6.0, help="px per sample before a direction counts")
+    p.add_argument("--max-drift", type=float, default=240.0, help="net px over the window to still be 'in place'")
+    p.add_argument("--drift-ratio", type=float, default=0.38, help="net/path ratio ceiling (oscillation guard)")
+    p.add_argument("--cooldown-ms", type=int, default=1600)
+    p.add_argument("--command", default="omarchy-shell omadrop capture")
+    p.add_argument("--log", default="")
+    return p
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+
+    sock_path = args.socket
+    if not sock_path:
+        xdg = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+        sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+        sock_path = os.path.join(xdg, "hypr", sig, ".socket.sock")
+
+    logf = open(args.log, "a", buffering=1) if args.log else None
+
+    def log(message: str) -> None:
+        if logf:
+            logf.write(f"{time.strftime('%H:%M:%S')} {message}\n")
+
+    log(f"start pid={os.getpid()} interval={args.interval_ms}ms window={args.window_ms}ms "
+        f"reversals={args.reversals} cooldown={args.cooldown_ms}ms cmd={args.command!r}")
+
+    history: deque = deque()
+    last_fire = 0.0
+    failures = 0
+    dt = max(args.interval_ms, 1) / 1000.0
+    window = max(args.window_ms, 60) / 1000.0
+
+    while running:
+        started = time.monotonic()
+
+        # ---- sample ------------------------------------------------------
+        try:
+            x, y = cursor_position(sock_path)
+            failures = 0
+        except FileNotFoundError:
+            log("hyprland socket missing; exiting")
+            break
+        except Exception:
+            failures += 1
+            if failures >= 40:
+                log("hyprland socket unreachable for too long; exiting")
+                break
+            time.sleep(min(0.5, failures * 0.02))
+            continue
+
+        now = time.monotonic()
+        history.append((now, x, y))
+        while history and now - history[0][0] > window:
+            history.popleft()
+
+        # ---- analyze -----------------------------------------------------
+        if len(history) >= 8 and now - last_fire >= args.cooldown_ms / 1000.0:
+            pts = list(history)
+
+            dx_total = sum(abs(pts[i + 1][1] - pts[i][1]) for i in range(len(pts) - 1))
+            dy_total = sum(abs(pts[i + 1][2] - pts[i][2]) for i in range(len(pts) - 1))
+            # Sample tuples are (t, x, y): index 1 tracks x, index 2 tracks y.
+            axis = 2 if dy_total > dx_total else 1
+
+            flips = 0
+            sign = 0
+            peak_speed = 0.0
+            path_length = 0.0
+
+            for i in range(1, len(pts)):
+                seg = math.hypot(pts[i][1] - pts[i - 1][1], pts[i][2] - pts[i - 1][2])
+                path_length += seg
+                speed = seg / dt
+                peak_speed = max(peak_speed, speed)
+
+                delta = pts[i][axis] - pts[i - 1][axis]
+                if abs(delta) >= args.deadzone:
+                    current = 1 if delta > 0 else -1
+                    if sign != 0 and current != sign and speed >= args.min_speed:
+                        flips += 1
+                    sign = current
+
+            net = math.hypot(pts[-1][1] - pts[0][1], pts[-1][2] - pts[0][2])
+            oscillating = net <= args.max_drift and (
+                path_length <= 0 or net / path_length <= args.drift_ratio
+            )
+
+            if flips >= args.reversals and peak_speed >= args.min_speed and oscillating:
+                last_fire = now
+                log(f"FIRE flips={flips} peak={peak_speed:.0f}px/s "
+                    f"net={net:.0f}px path={path_length:.0f}px axis={'y' if axis else 'x'}")
+                try:
+                    subprocess.Popen(
+                        args.command, shell=True,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+                except Exception as exc:  # never die from a bad command
+                    log(f"command failed: {exc}")
+
+        # ---- pace --------------------------------------------------------
+        elapsed = time.monotonic() - started
+        remaining = dt - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+
+    log("exit")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
