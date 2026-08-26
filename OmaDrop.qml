@@ -159,8 +159,9 @@ Item {
     }
   }
 
-  // Files dropped straight onto the zone (drag-in from other apps).
-  function addDroppedUris(urlList) {
+  // Files dropped straight onto the zone (drag-in from other apps), or the
+  // drag-all snapshot coming back home (silent — nothing new was added).
+  function addDroppedUris(urlList, silent) {
     var strings = []
     for (var i = 0; i < urlList.length; i++) strings.push(String(urlList[i]))
     if (strings.length === 0) return
@@ -168,17 +169,28 @@ Item {
     ShelfModel.addItems(root.state, strings, { maxItems: root.settings.maxItems })
     root.commitState()
     var addedCount = root.itemCount - before
-    if (addedCount > 0 && root.settings.showNotifications)
+    if (addedCount > 0 && !silent && root.settings.showNotifications)
       root.notify("OmaDrop", Strings.t("toastDroppedMany").replace("%1", String(addedCount)))
   }
 
   // ---- shelf mutations -------------------------------------------------------
   function clearActive() {
-    if (ShelfModel.clearActive(root.state)) root.commitState()
+    if (ShelfModel.clearActive(root.state)) {
+      root.commitState()
+      root.maybeCloseOnEmpty()
+    }
   }
 
   function removeTile(itemId) {
-    if (ShelfModel.removeItem(root.state, itemId)) root.commitState()
+    if (ShelfModel.removeItem(root.state, itemId)) {
+      root.commitState()
+      root.maybeCloseOnEmpty()
+    }
+  }
+
+  // An emptied zone has no reason to keep floating around.
+  function maybeCloseOnEmpty() {
+    if (root.opened && root.itemCount === 0) root.dismiss()
   }
 
   function archiveCurrent() {

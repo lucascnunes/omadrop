@@ -53,6 +53,13 @@ Item {
   property var activeDragTile: null
   property bool dropWasInternal: false
 
+  // Drag-all uses optimistic clearing: the shelf empties the moment the
+  // handle is picked up (Wayland reports IgnoreAction even for successful
+  // moves, so waiting for onDragFinished to clear never fired). The snapshot
+  // restores the items on an internal drop or an Esc cancel.
+  property bool activeDragWasAll: false
+  property var clearedSnapshot: []
+
   // ---- zone dragging ------------------------------------------------------
   // Local pointer coordinates are computed by the compositor against the
   // surface position at delivery time; while we reposition the surface those
@@ -182,8 +189,13 @@ Item {
           // still in the model, so finishDrag() must keep it.
           panelRoot.dropWasInternal = true
           if (panelRoot.activeDragTile) panelRoot.activeDragTile.finishDrag(false)
-          var urls = drop.urls || []
-          if (urls.length > 0 && controller) controller.addDroppedUris(urls)
+          if (panelRoot.activeDragWasAll) {
+            // Drag-all came home: put everything back, quietly.
+            if (controller) controller.addDroppedUris(panelRoot.clearedSnapshot, true)
+          } else {
+            var urls = drop.urls || []
+            if (urls.length > 0 && controller) controller.addDroppedUris(urls)
+          }
         }
       }
 
@@ -646,13 +658,13 @@ Item {
     Drag.hotSpot: Qt.point(width / 2, height / 2)
     Drag.mimeData: dragMimeData
 
-    function finishDrag(remove) {
+    function finishDrag() {
       if (!dragActive || dragEnding) return
       dragEnding = true
       dragActive = false
+      panelRoot.activeDragWasAll = false
       if (panelRoot.activeDragTile === allHandle) panelRoot.activeDragTile = null
       panelRoot.dropWasInternal = false
-      if (remove && controller) controller.clearActive()
     }
 
     Timer {
@@ -660,25 +672,20 @@ Item {
       running: allHandle.dragActive
       repeat: true
       onTriggered: if (allHandle.dragActive && !allHandle.dragEnding && !allHandle.Drag.active)
-                     allHandle.finishDrag(!panelRoot.dropWasInternal)
+                     allHandle.finishDrag() // already cleared optimistically
     }
 
     Drag.onDragFinished: function(action) {
-      allHandle.finishDrag(!panelRoot.dropWasInternal && action !== Qt.IgnoreAction)
+      // IgnoreAction = cancelled (Esc or compositor): put the items back.
+      if (action === Qt.IgnoreAction && controller)
+        controller.addDroppedUris(panelRoot.clearedSnapshot, true)
+      allHandle.finishDrag()
     }
 
     Row {
       id: allRow
       anchors.centerIn: parent
       spacing: Style.space(5)
-
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: "\uDB80\uDFBC"
-        color: Color.popups.text
-        font.family: Style.font.family
-        font.pixelSize: Style.font.bodySmall
-      }
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
@@ -717,9 +724,15 @@ Item {
           "text/uri-list": uris.join("\r\n") + "\r\n",
           "text/plain": paths.join("\n")
         }
+        // Optimistic clear: Wayland reports IgnoreAction even for successful
+        // moves, so clearing on drag-finish never fired. The snapshot restores
+        // on internal drops and Esc cancels.
+        panelRoot.clearedSnapshot = uris
+        panelRoot.activeDragWasAll = true
         panelRoot.dropWasInternal = false
         panelRoot.activeDragTile = allHandle
         allHandle.dragActive = true
+        controller.clearActive()
       }
     }
 

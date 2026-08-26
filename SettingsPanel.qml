@@ -333,24 +333,6 @@ Panel {
               onOpenRequested: function(id) { root.runIpc("reopen " + id) }
               onDeleteRequested: function(id) { root.runIpc("removeshelf " + id) }
             }
-
-          SectionLabel { title: Strings.t("sectionSupport") }
-
-          Row {
-            spacing: Style.space(6)
-
-            ChipButton {
-              label: "󰊗 github.com/lucascnunes/omadrop"
-              tooltipText: "https://github.com/lucascnunes/omadrop"
-              onClicked: Qt.openUrlExternally("https://github.com/lucascnunes/omadrop")
-            }
-
-            ChipButton {
-              label: "󰅶 ko-fi.com/lucascnunes"
-              tooltipText: "https://ko-fi.com/lucascnunes"
-              onClicked: Qt.openUrlExternally("https://ko-fi.com/lucascnunes")
-            }
-          }
           }
 
           Item {
@@ -366,6 +348,24 @@ Panel {
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
+          }
+        }
+
+        SectionLabel { title: Strings.t("sectionSupport") }
+
+        Row {
+          spacing: Style.space(6)
+
+          ChipButton {
+            label: "󰊗 github.com/lucascnunes/omadrop"
+            tooltipText: "https://github.com/lucascnunes/omadrop"
+            onClicked: Qt.openUrlExternally("https://github.com/lucascnunes/omadrop")
+          }
+
+          ChipButton {
+            label: "󰅶 ko-fi.com/lucascnunes"
+            tooltipText: "https://ko-fi.com/lucascnunes"
+            onClicked: Qt.openUrlExternally("https://ko-fi.com/lucascnunes")
           }
         }
       }
