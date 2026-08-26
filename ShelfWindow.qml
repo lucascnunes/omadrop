@@ -59,11 +59,10 @@ Item {
   property var activeDragTile: null
   property bool dropWasInternal: false
 
-  // Drag-all uses optimistic clearing: the shelf empties the moment the
-  // handle is picked up (Wayland reports IgnoreAction even for successful
-  // moves, so waiting for onDragFinished to clear never fired). The snapshot
-  // restores ONLY on explicit Esc. External drop archives + dismisses.
-  // Late MOVED_TO still rewrites archived paths.
+  // Drag-all keeps items in the model until an external finish archives them
+  // (clearing at pickup hid the drag source and made Wayland bounce the drop
+  // back into our DropArea). Esc cancels with items untouched. External drop
+  // archives + dismisses; late MOVED_TO still rewrites archived paths.
   property bool activeDragWasAll: false
   property var clearedSnapshot: []
   // Esc sets this; it is the ONLY cancel signal we trust for drag-all.
@@ -108,7 +107,10 @@ Item {
     if (!panelRoot.activeDragTile) return false
     panelRoot.dragCancelRequested = true
     panelRoot.dropWasInternal = true
-    if (panelRoot.activeDragWasAll && controller)
+    // Drag-all no longer clears the model at pickup — nothing to restore.
+    // (Legacy path: if a build left the shelf empty, put the snapshot back.)
+    if (panelRoot.activeDragWasAll && controller
+        && panelRoot.items.length === 0 && panelRoot.clearedSnapshot.length > 0)
       controller.restoreSnapshot(panelRoot.clearedSnapshot)
     panelRoot.activeDragTile.Drag.cancel()
     panelRoot.activeDragTile.finishDrag(false)
@@ -408,6 +410,11 @@ Item {
             cellHeight: Style.space(104)
 
             model: panelRoot.items
+            // Dim while drag-all is out — do NOT remove items from the model
+            // mid-drag (that hid AllDragHandle and made Qt bounce the drop
+            // back onto the zone, re-adding every file).
+            opacity: panelRoot.activeDragWasAll ? 0.35 : 1.0
+            Behavior on opacity { NumberAnimation { duration: 120 } }
 
             delegate: Tile {
               tileData: modelData
@@ -418,7 +425,7 @@ Item {
 
           EmptyState {
             anchors.fill: parent
-            visible: panelRoot.items.length === 0
+            visible: panelRoot.items.length === 0 && !panelRoot.activeDragWasAll
           }
         }
 
@@ -430,7 +437,11 @@ Item {
           Row {
             spacing: Style.space(6)
 
-            AllDragHandle { visible: panelRoot.items.length > 0 }
+            // Stay visible for the whole outbound drag-all (items may still
+            // be in the model; never hide the drag source mid-gesture).
+            AllDragHandle {
+              visible: panelRoot.items.length > 0 || panelRoot.activeDragWasAll
+            }
 
             ChipButton {
               label: Strings.tLang(uiLanguage, "newShelf")
@@ -802,6 +813,7 @@ Item {
       panelRoot.endOutboundDrag()
 
       if (cancelled) {
+        // Items were never removed from the model (or already restored).
         if (wasAll && snapshot && snapshot.length > 0 && controller
             && panelRoot.items.length === 0)
           controller.restoreSnapshot(snapshot)
@@ -816,10 +828,14 @@ Item {
         return
       }
 
-      // External finish: always archive + dismiss.
+      // External finish: archive snapshot (prefer in-model items if MOVED_TO
+      // already rewrote their paths) and dismiss.
       panelRoot.dragAllMoveHits = 0
-      if (snapshot && snapshot.length > 0 && panelRoot.controller)
-        panelRoot.controller.archiveDragAllSnapshot(snapshot)
+      var toArchive = snapshot
+      if (panelRoot.items.length > 0)
+        toArchive = ShelfModel.cloneJson(panelRoot.items)
+      if (toArchive && toArchive.length > 0 && panelRoot.controller)
+        panelRoot.controller.archiveDragAllSnapshot(toArchive)
       else if (panelRoot.controller)
         panelRoot.controller.dismiss()
     }
@@ -883,9 +899,9 @@ Item {
           "text/uri-list": uris.join("\r\n") + "\r\n",
           "text/plain": paths.join("\n")
         }
-        // Optimistic clear: Wayland reports IgnoreAction even for successful
-        // moves, so clearing on drag-finish never fired. Keep a FULL item
-        // clone so MOVED_TO can rewrite destinations before we archive.
+        // Snapshot for archive on success. Do NOT clearActive here — removing
+        // items hides this handle (drag source) and Qt ends up delivering the
+        // drop back to our DropArea, which re-filled the shelf.
         panelRoot.clearedSnapshot = ShelfModel.cloneJson(items)
         panelRoot.activeDragWasAll = true
         panelRoot.dragCancelRequested = false
@@ -898,8 +914,6 @@ Item {
         for (var t = 0; t < items.length; t++)
           if (items[t].path) trackPaths.push(items[t].path)
         if (trackPaths.length > 0) controller.startMoveTracking(trackPaths)
-        // Skip maybeCloseOnEmpty: the shelf is empty only for the drag UI.
-        controller.clearActive(false)
       }
     }
 
