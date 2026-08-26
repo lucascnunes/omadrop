@@ -202,6 +202,25 @@ t("archiveSnapshot files cleared drag-all items into history", function() {
   eq(archived.items[1].path, "/old/two.txt")
 })
 
+// Mirrors OmaDrop.finishDragAll: whatever the archive step decides, the
+// active shelf must end up empty so the zone can close.
+t("drag-all deliver leaves an empty active shelf", function() {
+  var st = M.emptyState()
+  M.addItems(st, ["/old/one.txt", "/old/two.txt"], {})
+  var snap = M.cloneJson(M.activeShelf(st).items)
+  M.clearActive(st) // optimistic clear at pickup
+  M.archiveSnapshot(st, snap, {})
+  M.clearActive(st)
+  eq(M.activeShelf(st).items.length, 0)
+
+  // A deliver with nothing to archive (empty snapshot) must still end empty.
+  var st2 = M.emptyState()
+  M.addItems(st2, ["/a.txt"], {})
+  eq(M.archiveSnapshot(st2, [], {}), false)
+  M.clearActive(st2)
+  eq(M.activeShelf(st2).items.length, 0)
+})
+
 t("reopenShelf archives the previously working shelf", function() {
   var st = M.emptyState()
   M.addItems(st, ["/a.txt"], {})

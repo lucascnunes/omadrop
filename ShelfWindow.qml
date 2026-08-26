@@ -93,13 +93,23 @@ Item {
   }
 
   // Move tracker callback: rewrite paths on the in-flight drag-all snapshot
-  // so archiveDragAllSnapshot records the destination, not the origin.
+  // so finishDragAll archives the destination, not the origin.
   function repointClearedSnapshot(oldPath, newPath) {
     if (!Array.isArray(clearedSnapshot) || clearedSnapshot.length === 0) return
     if (ShelfModel.repointItemsPath(clearedSnapshot, oldPath, newPath)) {
       clearedSnapshot = ShelfModel.cloneJson(clearedSnapshot)
       dragAllMoveHits++
     }
+  }
+
+  // Hands the in-flight drag-all snapshot over and resets it. Lives here, not
+  // in AllDragHandle: functions declared on an inline component's root cannot
+  // reach the document root's properties (that is what broke the drag-all
+  // teardown), so the safe move is to keep this logic on panelRoot itself.
+  function takeClearedSnapshot() {
+    var snap = ShelfModel.cloneJson(clearedSnapshot || []) || []
+    clearedSnapshot = []
+    return snap
   }
 
   function cancelActiveDrag() {
@@ -215,21 +225,17 @@ Item {
       Math.min(Math.max(panelRoot.edgeMargin, panelRoot.anchorY),
                Math.max(panelRoot.edgeMargin, panelRoot.monitorHeight - height - panelRoot.edgeMargin)))
 
-    // While a file drag is in flight, park the zone in the top-right corner.
-    // shelfPosition "cursor" otherwise leaves this Top layer under the pointer,
-    // so the DropArea steals the drop from the destination app and "restores"
-    // the shelf (select-all looks like it did nothing).
+    // Fading out beats moving: parking the zone in a corner during the drag
+    // just covered whatever lived in that corner, which is often the very
+    // window the files are headed for.
     readonly property bool parkForDrag: panelRoot.activeDragTile !== null
-    readonly property int parkedX: Math.round(
-      Math.max(panelRoot.edgeMargin, panelRoot.monitorWidth - width - panelRoot.edgeMargin))
-    readonly property int parkedY: panelRoot.edgeMargin
 
-    margins.left: parkForDrag ? parkedX : clampedX
-    margins.top: parkForDrag ? parkedY : clampedY
+    margins.left: clampedX
+    margins.top: clampedY
 
-    // Empty input region while a file drag is out: the Top layer must not
-    // become the Wayland drop target under the cursor (parking helps; this
-    // guarantees drops reach the destination app). Esc still works via Shortcut.
+    // Empty input region while a file drag is out: this Top layer must not
+    // become the Wayland drop target under the cursor, or the DropArea steals
+    // the drop from the destination app. Esc still works via Shortcut.
     Region { id: passThroughMask }
     Region { id: cardInputMask; item: card }
     mask: parkForDrag ? passThroughMask : cardInputMask
@@ -247,6 +253,11 @@ Item {
       border.width: 1
       border.color: dropArea.contains ? Color.accent : Color.popups.border
 
+      // Get out of the way while the files are in flight — opacity, never
+      // visible/enabled: hiding the drag source mid-gesture kills the drag.
+      opacity: panel.parkForDrag ? 0 : 1
+
+      Behavior on opacity { NumberAnimation { duration: 90 } }
       Behavior on border.color { ColorAnimation { duration: 120 } }
 
       // Keyboard escape hatch (works after the card takes OnDemand focus).
@@ -621,12 +632,16 @@ Item {
       panelRoot.dropWasInternal = false
       panelRoot.dragCancelRequested = false
       panelRoot.endOutboundDrag()
-      if (controller) controller.stopMoveTracking()
+      // Inline components do not see the document root's properties, so every
+      // controller hop here MUST go through panelRoot (bare `controller` threw
+      // ReferenceError and silently aborted the rest of this function).
+      var ctl = panelRoot.controller
+      if (ctl) ctl.stopMoveTracking()
       if (!cancelled && remove !== false) {
         if (tileData && tileData.id) removeRequested()
-        else if (tileData && tileData.path && controller)
-          controller.removeTileByPath(tileData.path)
-        if (controller) controller.maybeCloseOnEmpty()
+        else if (tileData && tileData.path && ctl)
+          ctl.removeTileByPath(tileData.path)
+        if (ctl) ctl.maybeCloseOnEmpty()
       }
     }
 
@@ -666,7 +681,8 @@ Item {
         panelRoot.beginOutboundDrag()
         panelRoot.activeDragTile = tile
         tile.dragActive = true
-        if (tileData.path) controller.startMoveTracking([tileData.path])
+        if (tileData.path && panelRoot.controller)
+          panelRoot.controller.startMoveTracking([tileData.path])
       }
       // onCanceled is deliberately NOT an end: it fires when the system drag
       // takes the grab at start. The end arrives via onDragFinished or the
@@ -793,42 +809,41 @@ Item {
       dragEnding = true
       dragActive = false
       dragArmed = false
+      // Inline components do not see the document root's properties: a bare
+      // `controller` here threw ReferenceError and aborted the rest of this
+      // function, which is why the drag-all drop never cleared or closed.
+      var ctl = panelRoot.controller
+      // Keep activeDragWasAll true until archive/restore is done so DropArea
+      // and addDroppedUris still refuse stolen drops during this teardown.
       var wasAll = panelRoot.activeDragWasAll
-      panelRoot.activeDragWasAll = false
       if (panelRoot.activeDragTile === allHandle) panelRoot.activeDragTile = null
       // Only Esc (dragCancelRequested) is a real cancel. dropWasInternal used
       // to fire when the zone stole the Wayland drop and wrongly restored.
       var cancelled = panelRoot.dragCancelRequested
       panelRoot.dropWasInternal = false
       panelRoot.dragCancelRequested = false
-      var snapshot = panelRoot.clearedSnapshot
-      panelRoot.clearedSnapshot = []
       panelRoot.endOutboundDrag()
+      if (ctl) ctl.stopMoveTracking()
+      panelRoot.dragAllMoveHits = 0
+      // Taken after stopMoveTracking so any last MOVED_TO rewrite is included.
+      var snapshot = panelRoot.takeClearedSnapshot()
 
       if (cancelled) {
-        if (wasAll && snapshot && snapshot.length > 0 && controller
+        if (wasAll && snapshot && snapshot.length > 0 && ctl
             && panelRoot.items.length === 0)
-          controller.restoreSnapshot(snapshot)
-        if (controller) controller.stopMoveTracking()
-        panelRoot.dragAllMoveHits = 0
+          ctl.restoreSnapshot(snapshot)
+        panelRoot.activeDragWasAll = false
         return
       }
 
-      if (!wasAll) {
-        if (controller) controller.stopMoveTracking()
-        panelRoot.dragAllMoveHits = 0
+      if (!wasAll || !ctl) {
+        panelRoot.activeDragWasAll = false
         return
       }
 
-      // External finish: archive the snapshot and dismiss. Model was already
-      // cleared at pickup; never re-add from DropArea (suppressInboundDrops).
-      panelRoot.dragAllMoveHits = 0
-      if (snapshot && snapshot.length > 0 && panelRoot.controller)
-        panelRoot.controller.archiveDragAllSnapshot(snapshot)
-      else if (panelRoot.controller) {
-        if (controller) controller.clearActive(false)
-        panelRoot.controller.dismiss()
-      }
+      // Delivered: file the snapshot into history, wipe the shelf, close.
+      ctl.finishDragAll(snapshot)
+      panelRoot.activeDragWasAll = false
     }
 
     Timer {
@@ -878,7 +893,8 @@ Item {
       onPositionChanged: function(mouse) {
         if (!pressed || allHandle.dragActive) return
         var dist = Math.abs(mouse.x - allHandle.pressPos.x) + Math.abs(mouse.y - allHandle.pressPos.y)
-        if (dist < Qt.styleHints.startDragDistance || !controller) return
+        var ctl = panelRoot.controller
+        if (dist < Qt.styleHints.startDragDistance || !ctl) return
 
         var uris = []
         var paths = []
@@ -905,8 +921,8 @@ Item {
         var trackPaths = []
         for (var t = 0; t < items.length; t++)
           if (items[t].path) trackPaths.push(items[t].path)
-        if (trackPaths.length > 0) controller.startMoveTracking(trackPaths)
-        controller.clearActive(false)
+        if (trackPaths.length > 0) ctl.startMoveTracking(trackPaths)
+        ctl.clearActive(false)
       }
     }
 

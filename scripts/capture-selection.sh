@@ -84,10 +84,53 @@ trap 'rm -rf "$SNAP"' EXIT
 prev_uri=""
 prev_png=""
 prev_txt=""
+prev_pri=""
 
 if wl-paste --type text/uri-list >"$SNAP/uri" 2>/dev/null && [[ -s $SNAP/uri ]]; then prev_uri="$SNAP/uri"; fi
 if wl-paste --type image/png     >"$SNAP/png" 2>/dev/null && [[ -s $SNAP/png ]]; then prev_png="$SNAP/png"; fi
 if wl-paste --type text          >"$SNAP/txt"  2>/dev/null && [[ -s $SNAP/txt ]]; then prev_txt="$SNAP/txt"; fi
+if wl-paste --primary --type text/uri-list >"$SNAP/pri" 2>/dev/null && [[ -s $SNAP/pri ]]; then prev_pri="$SNAP/pri"; fi
+
+cleared_clipboard="no"
+cleared_primary="no"
+
+restore_primary() {
+  if [[ $cleared_primary == "yes" && -n $prev_pri ]]; then
+    wl-copy --primary --type text/uri-list <"$prev_pri" >/dev/null 2>&1
+    cleared_primary="no"
+  fi
+}
+
+restore_previous() {
+  # wl-copy forks and keeps serving the clipboard; without the redirects it
+  # inherits our stdout/stderr and any caller waiting on pipe EOF hangs.
+  if [[ -n $prev_uri ]]; then
+    wl-copy --type text/uri-list <"$prev_uri" >/dev/null 2>&1
+  elif [[ -n $prev_png ]]; then
+    wl-copy --type image/png <"$prev_png" >/dev/null 2>&1
+  elif [[ -n $prev_txt ]]; then
+    wl-copy --type text <"$prev_txt" >/dev/null 2>&1
+  fi
+  cleared_clipboard="no"
+  restore_primary
+}
+
+# --------------------------------------------------------------------------
+# Drop any uri-list we are still holding from an earlier capture.
+#
+# With nothing selected the synthesized Ctrl+C is a no-op, so the read below
+# would hand back the *previous* capture's file list — and restoring it
+# afterwards kept that list alive forever, so every later shake re-shelved
+# the same files. Clearing first means anything we read after the copy was
+# published by our own keystroke. Clipboards holding no uri-list are left
+# untouched: they cannot be mistaken for a selection.
+clear_stale_uris() {
+  if [[ -n $prev_uri ]] && wl-copy --clear >/dev/null 2>&1; then cleared_clipboard="yes"; fi
+  if [[ -n $prev_pri ]] && wl-copy --primary --clear >/dev/null 2>&1; then cleared_primary="yes"; fi
+  [[ $cleared_clipboard == "yes" || $cleared_primary == "yes" ]] \
+    && debug "cleared stale uri-list (clipboard=$cleared_clipboard primary=$cleared_primary)"
+  return 0
+}
 
 # --------------------------------------------------------------------------
 # The invisible internal copy.
@@ -107,6 +150,7 @@ send_ctrl_c() {
   # get dropped by some apps.
   YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key -d 30 29:1 46:1 46:0 29:0 2>>"$LOG"
 }
+clear_stale_uris
 if probe_daemon; then
   if send_ctrl_c; then
     copy_sent="ydotool"
@@ -129,6 +173,9 @@ if [[ $copy_sent == "no" ]]; then
     copy_sent="wtype"
   else
     debug "no key synthesis available (continuing; clipboard may already hold a selection)"
+    # Without a copy of our own the pre-existing clipboard is all we have, so
+    # hand it back and fall through to the read (legacy manual-copy path).
+    restore_previous
   fi
 fi
 debug "copy sent via: $copy_sent"
@@ -147,18 +194,6 @@ if [[ -z ${cap//[[:space:]]/} ]]; then
   [[ -n ${cap//[[:space:]]/} ]] && debug "recovered from primary selection"
 fi
 
-restore_previous() {
-  # wl-copy forks and keeps serving the clipboard; without the redirects it
-  # inherits our stdout/stderr and any caller waiting on pipe EOF hangs.
-  if [[ -n $prev_uri ]]; then
-    wl-copy --type text/uri-list <"$prev_uri" >/dev/null 2>&1
-  elif [[ -n $prev_png ]]; then
-    wl-copy --type image/png <"$prev_png" >/dev/null 2>&1
-  elif [[ -n $prev_txt ]]; then
-    wl-copy --type text <"$prev_txt" >/dev/null 2>&1
-  fi
-}
-
 # Nothing came back: restore what the user had and report quietly.
 if [[ -z ${cap//[[:space:]]/} ]]; then
   restore_previous
@@ -167,10 +202,12 @@ if [[ -z ${cap//[[:space:]]/} ]]; then
   exit 0
 fi
 
-# If the clipboard already held this exact list there is nothing to undo.
+# The app just re-published the very list we snapshotted (same files selected
+# again): its own offer is richer than our uri-list-only copy, so leave it.
 if [[ -n $prev_uri ]] \
   && diff -q <(tr -d '\r' <"$prev_uri") <(printf '%s\n' "$cap" | tr -d '\r') >/dev/null 2>&1; then
-  debug "clipboard already matched; no restore needed"
+  restore_primary
+  debug "re-copied the same list; clipboard left as the app published it"
   finish true "" "$cap"
   exit 0
 fi

@@ -221,9 +221,13 @@ Item {
     }
   }
 
-  // Files dropped straight onto the zone (drag-in from other apps), or the
-  // drag-all snapshot coming back home (silent — nothing new was added).
+  // Files dropped straight onto the zone (drag-in from other apps).
+  // Never re-accept during/after an outbound drag — stolen Wayland drops
+  // used to put the drag-all snapshot right back on the shelf.
   function addDroppedUris(urlList, silent) {
+    if (shelfWindow.suppressInboundDrops || shelfWindow.activeDragWasAll
+        || shelfWindow.dragInProgress)
+      return
     var strings = []
     for (var i = 0; i < urlList.length; i++) strings.push(String(urlList[i]))
     if (strings.length === 0) return
@@ -266,11 +270,14 @@ Item {
     root.commitState()
   }
 
-  // Drag-all handed every item off: file the snapshot (with any MOVED_TO
-  // path rewrites already applied) into history, then close the zone.
-  function archiveDragAllSnapshot(items) {
-    if (ShelfModel.archiveSnapshot(root.state, items, {}))
-      root.commitState()
+  // Drag-all was delivered: file the snapshot (with any MOVED_TO path rewrites
+  // already applied) into history, then guarantee the end state the UX asks
+  // for — empty shelf, closed zone — whatever the archive did.
+  function finishDragAll(items) {
+    var snap = items && items.length ? items : null
+    if (snap) ShelfModel.archiveSnapshot(root.state, snap, {})
+    ShelfModel.clearActive(root.state)
+    root.commitState()
     root.dismiss()
   }
 
@@ -412,6 +419,9 @@ Item {
   Process {
     id: daemonReaper
     stdout: StdioCollector {}
+    // Ours starts only once the sweep is done: pkill runs async, so starting
+    // in parallel let it land on the daemon we had just spawned.
+    onExited: if (root.wantDaemon) daemonRestart.restart()
   }
 
   function reapDaemons() {
@@ -432,10 +442,7 @@ Item {
     root.wantDaemon = want
     shakeDaemon.command = args
     shakeDaemon.running = false
-    if (want) {
-      root.reapDaemons()
-      daemonRestart.restart()
-    }
+    if (want) root.reapDaemons()
   }
 
   onSettingsChanged: syncDaemon()
