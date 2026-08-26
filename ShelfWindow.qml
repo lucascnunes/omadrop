@@ -169,6 +169,12 @@ Item {
             // Esc (no active drag) closes the zone.
             if (panelRoot.activeDragTile) {
               panelRoot.activeDragTile.Drag.cancel()
+              // QtWayland reports IgnoreAction even for successful drops, so
+              // cancel-vs-drop cannot be told apart in onDragFinished: an Esc
+              // during a drag-all restores the snapshot right here.
+              if (panelRoot.activeDragWasAll && controller)
+                controller.addDroppedUris(panelRoot.clearedSnapshot, true)
+              panelRoot.activeDragTile.finishDrag(false)
             } else {
               panelRoot.requestClose()
             }
@@ -680,9 +686,9 @@ Item {
     }
 
     Drag.onDragFinished: function(action) {
-      // IgnoreAction = cancelled (Esc or compositor): put the items back.
-      if (action === Qt.IgnoreAction && controller)
-        controller.addDroppedUris(panelRoot.clearedSnapshot, true)
+      // Never restore here: QtWayland reports IgnoreAction even for
+      // successful external drops. Restores happen from the DropArea
+      // (internal drop) and the keyCatcher (Esc).
       allHandle.finishDrag()
     }
 
