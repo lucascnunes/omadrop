@@ -360,6 +360,33 @@ t("shelfAnchor honors corners", function() {
 })
 
 // ---------------------------------------------------------------------------
+// State file bounds
+
+t("isOversizedState trips exactly one byte past the cap", function() {
+  eq(M.isOversizedState("x".repeat(M.STATE_BYTES_MAX)), false)
+  eq(M.isOversizedState("x".repeat(M.STATE_BYTES_MAX + 1)), true)
+})
+
+t("deserializeState refuses an oversized state instead of parsing it", function() {
+  // A valid state padded past the cap: readers bound their read at cap + 1,
+  // so this is exactly the shape an oversized shelf.json arrives in.
+  var real = M.emptyState()
+  real.shelves = [{ id: "s1", createdAt: 1, updatedAt: 2, archivedAt: null,
+                    items: [{ path: "/tmp/a.txt", name: "a.txt", uri: "file:///tmp/a.txt", kind: "file" }] }]
+  real.activeShelfId = "s1"
+  var json = M.serializeState(real)
+  ok(M.deserializeState(json).shelves.length === 1, "sanity: parses under the cap")
+
+  var padded = json + " ".repeat(M.STATE_BYTES_MAX + 1 - json.length)
+  ok(padded.length === M.STATE_BYTES_MAX + 1, "padded to cap + 1")
+  eq(M.deserializeState(padded), M.emptyState(), "oversized state rejected")
+})
+
+t("countActiveItemsText reports zero for an oversized state", function() {
+  eq(M.countActiveItemsText("x".repeat(M.STATE_BYTES_MAX + 1)), 0)
+})
+
+// ---------------------------------------------------------------------------
 
 console.log(passed + " passed, " + failures + " failed")
 process.exit(failures === 0 ? 0 : 1)

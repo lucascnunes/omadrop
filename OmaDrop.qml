@@ -72,16 +72,37 @@ Item {
     root.state = ShelfModel.deserializeState(text)
   }
 
-  FileView {
-    id: stateFile
-    path: root.statePath
-    watchChanges: false // the panel owns writes; the bar widget watches instead
-    onLoaded: root.adoptState(text())
-    onLoadFailed: {
-      // First boot: materialize a valid state file so every later read is clean.
-      root.adoptState("")
-      root.saveState()
+  // Read through a byte-bounded `head` rather than FileView: shelf.json is
+  // user-writable and FileView has no size limit, so an oversized file would
+  // land in the shell whole. One byte past the cap keeps "too big" detectable.
+  // The panel owns writes and nothing else mutates the file behind us, so a
+  // single read at startup is all this needs.
+  Process {
+    id: stateReader
+    stdout: StdioCollector {
+      id: stateReaderOut
+      waitForEnd: true
     }
+    stderr: StdioCollector {}
+    onExited: {
+      var text = stateReaderOut.text || ""
+      if (ShelfModel.isOversizedState(text)) {
+        // Refuse it, and do NOT write over it — a state this big is not ours,
+        // and clobbering it would destroy whatever the user actually has.
+        console.warn("omadrop: shelf state above", ShelfModel.STATE_BYTES_MAX, "bytes — ignored")
+        return
+      }
+      root.adoptState(text)
+      // First boot (missing or empty file): materialize a valid state file so
+      // every later read is clean.
+      if (text === "") root.saveState()
+    }
+  }
+
+  function loadState() {
+    stateReader.command = ["bash", "-c", 'head -c "$1" -- "$0" 2>/dev/null || true',
+                           root.statePath, String(ShelfModel.STATE_BYTES_MAX + 1)]
+    stateReader.running = true
   }
 
   // Atomic write through bash: JSON travels as an argv slot, never through a
@@ -507,16 +528,14 @@ Item {
 
   // ---- wiring -----------------------------------------------------------------------------
   Component.onCompleted: {
-    Qt.callLater(function() {
-      syncDaemon()
-      // FileView may still be loading; adopt whatever is there by then.
-      if (root.state.shelves.length === 0) root.adoptState(stateFile.text())
-    })
+    root.loadState()
+    Qt.callLater(syncDaemon)
   }
 
   Component.onDestruction: {
     shakeDaemon.running = false
     stateWriter.running = false
+    stateReader.running = false
   }
 
   ShelfWindow {

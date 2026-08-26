@@ -20,6 +20,20 @@ var POSITIONS = ["cursor", "topLeft", "topCenter", "topRight", "bottomLeft", "bo
 var REVERSALS_MIN = 3
 var REVERSALS_MAX = 7
 
+// ---------------------------------------------------------------------------
+// State file bounds
+//
+// shelf.json lives in the user's state dir, so anything may be sitting there.
+// A state OmaDrop wrote is orders of magnitude under this (20 shelves x 100
+// items, worst case); anything bigger is refused instead of parsed. Readers
+// bound their read at STATE_BYTES_MAX + 1 so "too big" stays detectable
+// without pulling the whole file into the shell.
+var STATE_BYTES_MAX = 4 * 1024 * 1024
+
+function isOversizedState(text) {
+  return typeof text === "string" && text.length > STATE_BYTES_MAX
+}
+
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
@@ -238,6 +252,9 @@ function sanitizeShelf(raw) {
 }
 
 function deserializeState(text) {
+  // Single choke point: every reader lands here, so bounding it here covers
+  // the bar badge, the settings poll and the panel's own load alike.
+  if (isOversizedState(text)) return emptyState()
   var parsed = safeParse(text)
   var state = emptyState()
   if (!parsed) return state
@@ -629,6 +646,8 @@ if (typeof module !== "undefined" && module.exports) {
     POSITIONS: POSITIONS,
     REVERSALS_MIN: REVERSALS_MIN,
     REVERSALS_MAX: REVERSALS_MAX,
+    STATE_BYTES_MAX: STATE_BYTES_MAX,
+    isOversizedState: isOversizedState,
     normalizeSettings: normalizeSettings,
     safeParse: safeParse,
     cloneJson: cloneJson,
