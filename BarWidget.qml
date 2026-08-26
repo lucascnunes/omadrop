@@ -49,7 +49,11 @@ BarWidget {
   readonly property string barTooltip: Strings.tLang(root.uiLanguage, "barTooltip")
 
   function recount() {
-    counter.command = ["bash", "-c", 'cat "$0" 2>/dev/null || true', root.statePath]
+    // Byte-bounded on the producer side: shelf.json is user-writable, and an
+    // oversized one must never be collected whole into the shell. Reading one
+    // byte past the cap keeps "too big" detectable (ShelfModel refuses it).
+    counter.command = ["bash", "-c", 'head -c "$1" -- "$0" 2>/dev/null || true',
+                       root.statePath, String(ShelfModel.STATE_BYTES_MAX + 1)]
     counter.running = true
   }
 
@@ -142,6 +146,7 @@ BarWidget {
 
     Text {
       id: badgeLabel
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: root.itemCount > 99 ? "99+" : String(root.itemCount)
       color: Color.background

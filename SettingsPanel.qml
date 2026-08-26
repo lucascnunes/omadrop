@@ -66,7 +66,9 @@ Panel {
   function pollState() {
     var home = Quickshell.env("HOME") || ""
     var path = (Quickshell.env("XDG_STATE_HOME") || (home + "/.local/state")) + "/omadrop/shelf.json"
-    statePoll.command = ["bash", "-c", 'cat "$0" 2>/dev/null || true', path]
+    // Same byte bound as every other shelf.json reader — see ShelfModel.STATE_BYTES_MAX.
+    statePoll.command = ["bash", "-c", 'head -c "$1" -- "$0" 2>/dev/null || true',
+                         path, String(ShelfModel.STATE_BYTES_MAX + 1)]
     statePoll.running = true
   }
 
@@ -125,6 +127,7 @@ Panel {
         spacing: Style.space(10)
 
         Text {
+          textFormat: Text.PlainText
           text: Strings.tLang(effectiveSettings.language, "settingsTitle")
           color: Color.popups.text
           font.family: Style.font.family
@@ -139,6 +142,7 @@ Panel {
           spacing: Style.space(10)
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width - shakeToggleRow.width - parent.spacing
             anchors.verticalCenter: parent.verticalCenter
             text: Strings.tLang(effectiveSettings.language, "shakeRow")
@@ -171,12 +175,14 @@ Panel {
             spacing: 2
 
             Text {
+              textFormat: Text.PlainText
               text: Strings.tLang(effectiveSettings.language, "intensityRow")
               color: Color.popups.text
               font.family: Style.font.family
               font.pixelSize: Style.font.body
             }
             Text {
+              textFormat: Text.PlainText
               text: Strings.tLang(effectiveSettings.language, "intensityCaption").replace("%1", String(root.effectiveSettings.shakeReversals))
               color: Qt.darker(Color.popups.text, 1.45)
               font.family: Style.font.family
@@ -244,6 +250,7 @@ Panel {
           spacing: Style.space(10)
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width - langRow.width - parent.spacing
             anchors.verticalCenter: parent.verticalCenter
             text: Strings.tLang(effectiveSettings.language, "languageRow")
@@ -280,6 +287,7 @@ Panel {
           spacing: Style.space(10)
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width - notifyToggle.width - parent.spacing
             anchors.verticalCenter: parent.verticalCenter
             text: Strings.tLang(effectiveSettings.language, "notificationsRow")
@@ -309,12 +317,14 @@ Panel {
             spacing: 2
 
             Text {
+              textFormat: Text.PlainText
               text: Strings.tLang(effectiveSettings.language, "limitRow")
               color: Color.popups.text
               font.family: Style.font.family
               font.pixelSize: Style.font.body
             }
             Text {
+              textFormat: Text.PlainText
               text: Strings.tLang(effectiveSettings.language, "limitCaption")
               color: Qt.darker(Color.popups.text, 1.45)
               font.family: Style.font.family
@@ -384,6 +394,7 @@ Panel {
             visible: !historyList.visible
 
             Text {
+              textFormat: Text.PlainText
               anchors.centerIn: parent
               text: Strings.tLang(effectiveSettings.language, "historyEmptyShort")
               color: Qt.darker(Color.popups.text, 1.5)
@@ -417,6 +428,7 @@ Panel {
   // ---- reusable bits -----------------------------------------------------------
 
   component SectionLabel: Text {
+    textFormat: Text.PlainText
     property string title: ""
     width: parent ? parent.width : implicitWidth
     text: title
@@ -450,6 +462,7 @@ Panel {
 
     Text {
       id: minusBtn
+      textFormat: Text.PlainText
       anchors.left: parent.left
       anchors.leftMargin: Style.space(8)
       anchors.verticalCenter: parent.verticalCenter
@@ -468,6 +481,7 @@ Panel {
 
     Text {
       id: valueLabel
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       width: Style.space(30)
       horizontalAlignment: Text.AlignHCenter
@@ -480,6 +494,7 @@ Panel {
 
     Text {
       id: plusBtn
+      textFormat: Text.PlainText
       anchors.right: parent.right
       anchors.rightMargin: Style.space(8)
       anchors.verticalCenter: parent.verticalCenter
@@ -515,6 +530,7 @@ Panel {
 
     Text {
       id: posLabel
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: positionLabel
       color: active ? Color.accent : Color.popups.text
@@ -550,6 +566,7 @@ Panel {
       spacing: 2
 
       Text {
+        textFormat: Text.PlainText
         text: labelText
         color: Color.popups.text
         font.family: Style.font.family
@@ -600,6 +617,7 @@ Panel {
 
     Text {
       id: chipLabel
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: chipButton.label
       color: Color.popups.text
@@ -640,6 +658,7 @@ Panel {
       spacing: Style.space(8)
 
       Text {
+        textFormat: Text.PlainText
         anchors.verticalCenter: parent.verticalCenter
         text: shelf ? Qt.formatDateTime(new Date(shelf.updatedAt || Date.now()), "dd MMM HH:mm") : ""
         color: Color.popups.text
@@ -648,6 +667,7 @@ Panel {
       }
 
       Text {
+        textFormat: Text.PlainText
         anchors.verticalCenter: parent.verticalCenter
         text: shelf ? "· " + (shelf.items.length === 1
                                ? Strings.tLang(effectiveSettings.language, "oneItem")
@@ -699,6 +719,7 @@ Panel {
            : "transparent"
 
     Text {
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: iconChip.glyph
       color: Color.popups.text
