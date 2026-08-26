@@ -21,7 +21,7 @@ mkdir -p "$STATE_DIR"
 LOG="${OMADROP_CAPTURE_LOG:-$STATE_DIR/capture.log}"
 
 say()   { printf '%s %s\n' "$(date +%H:%M:%S)" "$*" >>"$LOG" 2>/dev/null || true; }
-debug() { [[ -n ${OMADROP_DEBUG:-} ]] && say "DEBUG $*" || true; }
+debug() { say "DEBUG $*"; }
 
 finish() { # $1 = ok ("true"/"false")  $2 = reason  $3 = raw uri-list
   RAW="$3" python3 - "$1" "$2" <<'PY' 2>>"$LOG"
@@ -100,10 +100,17 @@ YDOTOOL_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/ydotoold.socket"
 copy_sent="no"
 # A dead daemon leaves the socket file behind; probe before trusting it.
 probe_daemon() {
-  [ -S "$YDOTOOL_SOCKET" ] && YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key 194:1 194:0 2>>"$LOG"
+  [ -S "$YDOTOOL_SOCKET" ] && YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key -d 30 194:1 194:0 2>>"$LOG"
+}
+send_ctrl_c() {
+  # 29 = LeftCtrl, 46 = C. -d 30 spaces the events: back-to-back key events
+  # get dropped by some apps.
+  YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key -d 30 29:1 46:1 46:0 29:0 2>>"$LOG"
 }
 if probe_daemon; then
-  copy_sent="ydotool"
+  if send_ctrl_c; then
+    copy_sent="ydotool"
+  fi
 else
   rm -f "$YDOTOOL_SOCKET"
   YDOTOOL_SOCKET="$YDOTOOL_SOCKET" nohup ydotoold -p "$YDOTOOL_SOCKET" >/dev/null 2>&1 &
@@ -111,7 +118,7 @@ else
     [ -S "$YDOTOOL_SOCKET" ] && break
     sleep 0.1
   done
-  if probe_daemon; then
+  if probe_daemon && send_ctrl_c; then
     copy_sent="ydotool"
   else
     debug "ydotoold could not start; falling back to wtype"
@@ -125,9 +132,15 @@ if [[ $copy_sent == "no" ]]; then
   fi
 fi
 debug "copy sent via: $copy_sent"
-sleep 0.3
 
-cap="$(wl-paste --type text/uri-list 2>/dev/null || true)"
+# Wait for the copy to actually land instead of a fixed sleep: Nautilus and
+# friends can take a few hundred ms to publish the new clipboard.
+cap=""
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  cap="$(wl-paste --type text/uri-list 2>/dev/null || true)"
+  [ -n "${cap//[[:space:]]/}" ] && break
+  sleep 0.1
+done
 # Some apps only mirror the copy into the primary selection.
 if [[ -z ${cap//[[:space:]]/} ]]; then
   cap="$(wl-paste --primary --type text/uri-list 2>/dev/null || true)"
