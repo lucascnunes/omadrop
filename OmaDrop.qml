@@ -116,6 +116,46 @@ Item {
     stateWriter.running = true
   }
 
+  // ---- move tracking ----------------------------------------------------------
+  // While a tile/handle drag is out in the wild, this watcher watches $HOME
+  // for the file being moved and repoints the tile to its new home (a plain
+  // copy never fires MOVED_TO and is left alone).
+  Process {
+    id: moveTracker
+    stdout: SplitParser {
+      onRead: function(data) {
+        var parts = String(data).trim().split("\t")
+        if (parts.length !== 2) return
+        var oldPath = parts[0]
+        var newPath = parts[1]
+        var shelf = ShelfModel.activeShelf(root.state)
+        if (!shelf) return
+        var changed = false
+        for (var i = 0; i < shelf.items.length; i++) {
+          var it = shelf.items[i]
+          if (it.path === oldPath && it.path !== newPath) {
+            it.path = newPath
+            it.uri = ShelfModel.pathToUri(newPath)
+            it.name = ShelfModel.baseName(newPath)
+            changed = true
+          }
+        }
+        if (changed) root.commitState()
+      }
+    }
+    stderr: StdioCollector {}
+  }
+
+  function startMoveTracking(paths) {
+    if (!paths || paths.length === 0) return
+    moveTracker.command = ["bash", root.scriptPath("track-moves.sh")].concat(paths)
+    moveTracker.running = true
+  }
+
+  function stopMoveTracking() {
+    moveTracker.running = false
+  }
+
   // ---- capture pipeline ------------------------------------------------------
   Process {
     id: captureProc

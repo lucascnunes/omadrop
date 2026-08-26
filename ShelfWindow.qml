@@ -491,6 +491,7 @@ Item {
     // the system drag takes the grab at start.
     property bool dragActive: false
     property bool dragEnding: false
+    property bool imageBroken: false
     property string dragImageUrl: ""
     property point dragPressPos: Qt.point(0, 0)
 
@@ -520,6 +521,9 @@ Item {
       if (panelRoot.activeDragTile === tile) panelRoot.activeDragTile = null
       var wasInternal = panelRoot.dropWasInternal
       panelRoot.dropWasInternal = false
+      // External drags keep the watcher alive: the move resolves while the
+      // file lands and the tile repoints itself. Internal/cancel: stop it.
+      if (wasInternal || !remove) controller.stopMoveTracking()
       if (!wasInternal && remove) removeRequested()
     }
 
@@ -555,6 +559,7 @@ Item {
         panelRoot.dropWasInternal = false
         panelRoot.activeDragTile = tile
         tile.dragActive = true
+        if (tileData.path) controller.startMoveTracking([tileData.path])
       }
       // onCanceled is deliberately NOT an end: it fires when the system drag
       // takes the grab at start. The end arrives via onDragFinished or the
@@ -570,7 +575,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         width: Style.space(46)
         height: Style.space(46)
-        active: tileData && tileData.kind === "image" && tileData.path !== null
+        active: tileData && tileData.kind === "image" && tileData.path !== null && !imageBroken
         // An inactive Loader still reserves its size in the Column, pushing
         // glyph tiles' captions out the bottom — hide it outright.
         visible: active
@@ -578,16 +583,17 @@ Item {
           // tileData.uri is already a properly percent-encoded file:// URL.
           source: tileData ? tileData.uri : ""
           asynchronous: true
-          cache: true
+          cache: false
           fillMode: Image.PreserveAspectFit
           sourceSize.width: Style.space(92)
           sourceSize.height: Style.space(92)
+          onStatusChanged: if (status === Image.Error) tile.imageBroken = true
         }
       }
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        visible: !(tileData && tileData.kind === "image")
+        visible: !(tileData && tileData.kind === "image") || imageBroken
         text: glyphForKind(tileData ? tileData.kind : "file")
         color: tileData && tileData.kind === "dir" ? Color.accent : Color.popups.text
         font.family: Style.font.family
@@ -670,7 +676,12 @@ Item {
       dragActive = false
       panelRoot.activeDragWasAll = false
       if (panelRoot.activeDragTile === allHandle) panelRoot.activeDragTile = null
+      var wasInternal = panelRoot.dropWasInternal
       panelRoot.dropWasInternal = false
+      // Same contract as tiles: keep the watcher for external drops (the
+      // shelf was cleared optimistically and the tracker repoints nothing,
+      // but a future re-add via history stays consistent); stop otherwise.
+      if (wasInternal) controller.stopMoveTracking()
       // Everything was handed off and the shelf is empty: dismiss the zone.
       // (Not at pickup — closing the window here would kill the drag.)
       if (panelRoot.items.length === 0 && panelRoot.controller)
@@ -742,6 +753,10 @@ Item {
         panelRoot.dropWasInternal = false
         panelRoot.activeDragTile = allHandle
         allHandle.dragActive = true
+        var trackPaths = []
+        for (var t = 0; t < items.length; t++)
+          if (items[t].path) trackPaths.push(items[t].path)
+        if (trackPaths.length > 0) controller.startMoveTracking(trackPaths)
         controller.clearActive()
       }
     }
