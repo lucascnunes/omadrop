@@ -11,17 +11,8 @@ hotkey) e uma shelf aparece junto ao cursor segurando os arquivos enquanto
 você navega até o destino real — navegador, outro app, outra workspace — e
 arrasta os itens de lá.
 
-```
-┌──────────────────────────────┐
-│ 󰏗 OmaDrop   3 itens    󰤨   │
-├──────────────────────────────┤
-│ ┌──────┐ ┌──────┐ ┌──────┐  │
-│ │ 󰈟    │ │ 󰉋    │ │ 󰈦    │  │
-│ │a.png │ │pasta │ │rel.pdf│ │
-│ └──────┘ └──────┘ └──────┘  │
-│ [ Nova shelf ] [ Limpar ]    │
-└──────────────────────────────┘
-```
+<img width="1029" height="766" alt="image" src="https://github.com/user-attachments/assets/e62d8aad-86cc-4011-9f16-484484aa4479" />
+
 
 ## Instalação
 
