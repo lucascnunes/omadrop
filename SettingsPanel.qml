@@ -221,6 +221,7 @@ Panel {
           labelText: Strings.t("hotkeyCapture")
           combo: root.effectiveSettings.hotkeyCapture
           hintText: "capture"
+          onComboEdited: function(value) { root.persistSettings({ hotkeyCapture: value }) }
           onCopyLine: function(line) { root.copyHotkey(line) }
         }
 
@@ -228,6 +229,7 @@ Panel {
           labelText: Strings.t("hotkeyOpen")
           combo: root.effectiveSettings.hotkeyOpen
           hintText: "open"
+          onComboEdited: function(value) { root.persistSettings({ hotkeyOpen: value }) }
           onCopyLine: function(line) { root.copyHotkey(line) }
         }
 
@@ -489,10 +491,14 @@ Panel {
     }
   }
 
+  // Editable documentation: the field mirrors (and persists) the combo so
+  // the copied bindings.lua line always matches what the user really runs.
   component HotkeyRow: Row {
+    id: hotkeyRow
     property string labelText: ""
     property string combo: ""
     property string hintText: ""
+    signal comboEdited(string value)
     signal copyLine(string line)
 
     width: parent ? parent.width : implicitWidth
@@ -510,13 +516,18 @@ Panel {
         font.pixelSize: Style.font.body
       }
 
-      Text {
-        text: combo + "  ·  omarchy-shell omadrop " + hintText
-        color: Qt.darker(Color.popups.text, 1.45)
+      TextField {
+        id: comboField
+        width: parent.width
+        text: hotkeyRow.combo
+        placeholderText: "ALT SHIFT, SPACE"
+        foreground: Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
-        elide: Text.ElideMiddle
-        width: Math.min(implicitWidth, parent.width)
+        onEditingFinished: {
+          var value = text.trim()
+          if (value !== "" && value !== hotkeyRow.combo) hotkeyRow.comboEdited(value)
+        }
       }
     }
 
@@ -524,8 +535,8 @@ Panel {
       id: copyChip
       anchors.verticalCenter: parent.verticalCenter
       label: Strings.t("copyLine")
-      tooltipText: "bind = " + combo + ", exec, omarchy-shell omadrop " + hintText
-      onClicked: copyLine("bind = " + combo + ", exec, omarchy-shell omadrop " + hintText)
+      tooltipText: "bind = " + comboField.text + ", exec, omarchy-shell omadrop " + hintText
+      onClicked: copyLine("bind = " + comboField.text + ", exec, omarchy-shell omadrop " + hintText)
     }
   }
 
