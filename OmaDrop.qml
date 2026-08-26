@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import "ShelfModel.js" as ShelfModel
+import "Strings.js" as Strings
 
 // OmaDrop panel root. Owns the shelf state, user settings, the shake daemon
 // and the capture pipeline; ShelfWindow.qml draws the floating zone and
@@ -130,10 +131,10 @@ Item {
     if (!res.ok) {
       if (res.reason === "terminal-focused") return // stay quiet in terminals
       if (res.reason === "no-selection") {
-        if (root.settings.showNotifications) root.notify("OmaDrop", "Nada capturado — selecione arquivos primeiro")
+        if (root.settings.showNotifications) root.notify("OmaDrop", Strings.t("toastNothing"))
         return
       }
-      if (root.settings.showNotifications) root.notify("OmaDrop", "Captura falhou (" + (res.reason || "erro") + ")")
+      if (root.settings.showNotifications) root.notify("OmaDrop", Strings.t("toastFailed").replace("%1", res.reason || "?"))
       return
     }
 
@@ -143,12 +144,13 @@ Item {
 
     if (outcome.added > 0) {
       if (root.settings.showNotifications) {
-        var noun = outcome.added === 1 ? "arquivo" : "arquivos"
-        root.notify("OmaDrop", outcome.added + " " + noun + " na shelf")
+        var toast = outcome.added === 1 ? Strings.t("toastShelvedOne")
+                                        : Strings.t("toastShelvedMany").replace("%1", String(outcome.added))
+        root.notify("OmaDrop", toast)
       }
       if (!root.opened) root.openShelf("shelf")
     } else if (outcome.duplicates > 0 && root.settings.showNotifications) {
-      root.notify("OmaDrop", "Já está na shelf")
+      root.notify("OmaDrop", Strings.t("toastDuplicate"))
     }
   }
 
@@ -161,7 +163,7 @@ Item {
     root.state = outcome.state
     root.saveState()
     if (outcome.added > 0 && root.settings.showNotifications)
-      root.notify("OmaDrop", outcome.added + " recebido(s) na shelf")
+      root.notify("OmaDrop", Strings.t("toastDroppedMany").replace("%1", String(outcome.added)))
   }
 
   // ---- shelf mutations -------------------------------------------------------
@@ -176,7 +178,7 @@ Item {
   function archiveCurrent() {
     root.state = ShelfModel.archiveCurrent(root.state, {})
     root.saveState()
-    if (root.settings.showNotifications) root.notify("OmaDrop", "Nova shelf criada — a anterior foi para o histórico")
+    if (root.settings.showNotifications) root.notify("OmaDrop", Strings.t("toastArchived"))
   }
 
   function reopenShelf(id) {
@@ -326,7 +328,7 @@ Item {
   function copyText(value) {
     copier.command = ["bash", "-c", 'printf "%s" "$1" | wl-copy --type text/plain', "omadrop", String(value)]
     copier.running = true
-    root.notify("OmaDrop", "Linha copiada — cole em ~/.config/hypr/bindings.lua")
+    root.notify("OmaDrop", Strings.t("toastCopied"))
   }
 
   // ---- IPC -------------------------------------------------------------------------------

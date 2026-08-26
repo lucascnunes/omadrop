@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "ShelfModel.js" as ShelfModel
+import "Strings.js" as Strings
 
 // The floating OmaDrop zone: a small layer-shell window anchored near the
 // cursor or a screen corner. It is deliberately NOT a fullscreen scrim — the
@@ -82,7 +83,9 @@ Item {
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
-    implicitWidth: card.width
+    // Width comes from the constant, never from card↔panel cross-references
+    // (a binding cycle collapses the layer surface to 1px wide).
+    implicitWidth: panelRoot.cardWidth
     implicitHeight: card.height
 
     readonly property int clampedX: Math.round(
@@ -100,7 +103,7 @@ Item {
       id: card
       anchors.top: parent.top
       anchors.left: parent.left
-      width: panel.width
+      width: panelRoot.cardWidth
       height: contentCol.implicitHeight + Style.space(14) * 2
 
       radius: Style.cornerRadius > 0 ? Style.cornerRadius : 8
@@ -182,7 +185,7 @@ Item {
               Text {
                 id: countLabel
                 anchors.centerIn: parent
-                text: panelRoot.items.length + (panelRoot.items.length === 1 ? " item" : " itens")
+                text: panelRoot.items.length === 1 ? Strings.t("oneItem") : Strings.t("manyItems").replace("%1", String(panelRoot.items.length))
                 color: Color.popups.text
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
@@ -197,14 +200,14 @@ Item {
 
             IconChip {
               glyph: "󰤨"
-              tooltipText: "Configurações e histórico"
+              tooltipText: Strings.t("gearTooltip")
               activeGlyph: panelRoot.isSettingsView
               onClicked: panelRoot.setView(panelRoot.isSettingsView ? "shelf" : "settings")
             }
 
             IconChip {
               glyph: ""
-              tooltipText: "Fechar (Esc)"
+              tooltipText: Strings.t("closeTooltip")
               onClicked: panelRoot.requestClose()
             }
           }
@@ -262,14 +265,14 @@ Item {
               spacing: Style.space(6)
 
               ChipButton {
-                label: " Nova shelf"
-                tooltipText: "Guarda esta shelf no histórico e começa outra"
+                label: Strings.t("newShelf")
+                tooltipText: Strings.t("newShelfTooltip")
                 onClicked: if (controller) controller.archiveCurrent()
               }
 
               ChipButton {
-                label: " Limpar"
-                tooltipText: "Esvazia a shelf atual (o histórico fica intacto)"
+                label: Strings.t("clearShelf")
+                tooltipText: Strings.t("clearShelfTooltip")
                 enabled: panelRoot.items.length > 0
                 onClicked: if (controller) controller.clearActive()
               }
@@ -279,8 +282,8 @@ Item {
               Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: panelRoot.items.length > 0
-                      ? "arraste um tile para qualquer app · solte arquivos aqui para guardar"
-                      : "sacuda o mouse sobre uma seleção ou use a hotkey de captura"
+                      ? Strings.t("dragHintWithItems")
+                      : Strings.t("dragHintEmpty")
                 color: Qt.darker(Color.popups.text, 1.6)
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
@@ -297,7 +300,7 @@ Item {
           visible: panelRoot.isSettingsView
           enabled: visible
 
-          SectionLabel { title: "SHAKE" }
+          SectionLabel { title: Strings.t("sectionShake") }
 
           Row {
             width: parent.width
@@ -306,7 +309,7 @@ Item {
             Text {
               width: parent.width - toggleRow.width - parent.spacing
               anchors.verticalCenter: parent.verticalCenter
-              text: "Capturar ao sacudir o mouse"
+              text: Strings.t("shakeRow")
               color: Color.popups.text
               font.family: Style.font.family
               font.pixelSize: Style.font.body
@@ -338,13 +341,13 @@ Item {
               spacing: 2
 
               Text {
-                text: "Intensidade do gesto"
+                text: Strings.t("intensityRow")
                 color: Color.popups.text
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
               }
               Text {
-                text: panelRoot.settings.shakeReversals + " reversões · menos = mais sensível ao sacudir"
+                text: Strings.t("intensityCaption").replace("%1", String(panelRoot.settings.shakeReversals))
                 color: Qt.darker(Color.popups.text, 1.45)
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
@@ -363,14 +366,14 @@ Item {
             }
           }
 
-          SectionLabel { title: "POSIÇÃO DA JANELA" }
+          SectionLabel { title: Strings.t("sectionPosition") }
 
           Row {
             spacing: Style.space(6)
 
             Repeater {
               model: [
-                { key: "cursor", label: "Cursor" },
+                { key: "cursor", label: Strings.t("posCursor") },
                 { key: "topLeft", label: "󰁛" },
                 { key: "topRight", label: "󰁜" },
                 { key: "bottomLeft", label: "󰁝" },
@@ -386,23 +389,23 @@ Item {
             }
           }
 
-          SectionLabel { title: "HOTKEYS" }
+          SectionLabel { title: Strings.t("sectionHotkeys") }
 
           HotkeyRow {
-            labelText: "Capturar seleção"
+            labelText: Strings.t("hotkeyCapture")
             combo: panelRoot.settings.hotkeyCapture
             hintText: "omadrop capture"
             onCopyLine: function(line) { if (controller) controller.copyText(line) }
           }
 
           HotkeyRow {
-            labelText: "Abrir a shelf"
+            labelText: Strings.t("hotkeyOpen")
             combo: panelRoot.settings.hotkeyOpen
             hintText: "omadrop open"
             onCopyLine: function(line) { if (controller) controller.copyText(line) }
           }
 
-          SectionLabel { title: "GERAL" }
+          SectionLabel { title: Strings.t("sectionGeneral") }
 
           Row {
             width: parent.width
@@ -411,7 +414,7 @@ Item {
             Text {
               width: parent.width - notifyToggle.width - parent.spacing
               anchors.verticalCenter: parent.verticalCenter
-              text: "Notificações ao capturar"
+              text: Strings.t("notificationsRow")
               color: Color.popups.text
               font.family: Style.font.family
               font.pixelSize: Style.font.body
@@ -438,13 +441,13 @@ Item {
               spacing: 2
 
               Text {
-                text: "Limite da shelf"
+                text: Strings.t("limitRow")
                 color: Color.popups.text
                 font.family: Style.font.family
                 font.pixelSize: Style.font.body
               }
               Text {
-                text: "Itens excedentes são descartados do início"
+                text: Strings.t("limitCaption")
                 color: Qt.darker(Color.popups.text, 1.45)
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
@@ -463,7 +466,7 @@ Item {
             }
           }
 
-          SectionLabel { title: "SHELVES RECENTES" }
+          SectionLabel { title: Strings.t("sectionHistory") }
 
           Item {
             width: parent.width
@@ -499,7 +502,7 @@ Item {
               id: emptyHistory
               visible: !historyList.visible || historyList.count === 0
               width: parent.width
-              text: visible ? "Sem histórico ainda" : ""
+              text: visible ? Strings.t("historyEmptyShort") : ""
               color: Qt.darker(Color.popups.text, 1.6)
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
@@ -741,7 +744,7 @@ Item {
     ChipButton {
       id: copyChip
       anchors.verticalCenter: parent.verticalCenter
-      label: " Copiar linha p/ bindings.lua"
+      label: Strings.t("copyLine")
       tooltipText: "bind = " + combo + ", exec, omarchy-shell " + hintText
       onClicked: copyLine("bind = " + combo + ", exec, omarchy-shell " + hintText)
     }
@@ -792,7 +795,7 @@ Item {
         Text {
           id: activeLabel
           anchors.centerIn: parent
-          text: "atual"
+          text: Strings.t("activeBadge")
           color: Color.accent
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
@@ -810,14 +813,14 @@ Item {
       IconChip {
         visible: !isActive && shelf !== null
         glyph: "󰌷"
-        tooltipText: "Tornar atual"
+        tooltipText: Strings.t("makeCurrent")
         onClicked: openRequested(shelf.id)
       }
 
       IconChip {
         visible: shelf !== null
         glyph: ""
-        tooltipText: "Apagar do histórico"
+        tooltipText: Strings.t("deleteShelfTip")
         onClicked: deleteRequested(shelf.id)
       }
     }
@@ -964,7 +967,7 @@ Item {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         visible: !compact
-        text: "Arraste arquivos para cá, sacuda o mouse sobre\numa seleção ou use a hotkey de captura."
+        text: Strings.t("emptyHint")
         color: Qt.darker(Color.popups.text, 1.5)
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
@@ -974,7 +977,7 @@ Item {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         visible: compact
-        text: "Nada arquivado ainda"
+        text: Strings.t("historyEmptyShort")
         color: Qt.darker(Color.popups.text, 1.5)
         font.family: Style.font.family
         font.pixelSize: Style.font.caption

@@ -4,6 +4,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "ShelfModel.js" as ShelfModel
+import "Strings.js" as Strings
 
 // OmaDrop's bar icon. Left click toggles the floating shelf, right click
 // opens the settings/history view, middle click clears the active shelf.
@@ -57,7 +58,7 @@ BarWidget {
     text: "󰏗"
     labelVisible: true
     hasVisualContent: true
-    tooltipText: "OmaDrop · esquerdo: shelf · direito: configurações · meio: limpar"
+    tooltipText: Strings.t("barTooltip")
 
     onPressed: function(b) {
       // Bar.run is the first-party contract (see omarchy.microphone); the
