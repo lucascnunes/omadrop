@@ -62,14 +62,37 @@ Item {
   // Drag-all uses optimistic clearing: the shelf empties the moment the
   // handle is picked up (Wayland reports IgnoreAction even for successful
   // moves, so waiting for onDragFinished to clear never fired). The snapshot
-  // restores on Esc / drop-back-home, and is archived + zone dismissed on a
-  // successful external drop. Late MOVED_TO still rewrites archived paths.
+  // restores ONLY on explicit Esc. External drop archives + dismisses.
+  // Late MOVED_TO still rewrites archived paths.
   property bool activeDragWasAll: false
   property var clearedSnapshot: []
-  // Esc often cancels the Wayland drag without delivering Keys.onPressed;
-  // this flag (set by our Esc handlers) distinguishes cancel from deliver.
+  // Esc sets this; it is the ONLY cancel signal we trust for drag-all.
+  // dropWasInternal alone is NOT cancel — the Top-layer zone often receives
+  // the Wayland drop under the cursor and that used to restore the shelf.
   property bool dragCancelRequested: false
   property int dragAllMoveHits: 0
+  // Ignore inbound DropArea events for the whole outbound drag and a short
+  // tail after finish — late drop events otherwise re-add the same URIs.
+  property bool suppressInboundDrops: false
+
+  Timer {
+    id: inboundDropGate
+    interval: 500
+    repeat: false
+    onTriggered: panelRoot.suppressInboundDrops = false
+  }
+
+  function beginOutboundDrag() {
+    panelRoot.suppressInboundDrops = true
+    inboundDropGate.stop()
+  }
+
+  function endOutboundDrag() {
+    // Keep DropArea deaf briefly so a ghost drop after Drag.active flips
+    // cannot addDroppedUris / restore the snapshot we just archived.
+    panelRoot.suppressInboundDrops = true
+    inboundDropGate.restart()
+  }
 
   // Move tracker callback: rewrite paths on the in-flight drag-all snapshot
   // so archiveDragAllSnapshot records the destination, not the origin.
@@ -242,27 +265,24 @@ Item {
       }
 
       // Files dragged from other apps land here and join the shelf.
-      // Disabled during our own outbound drag so we never treat a stolen
-      // drop as "back home" if parking somehow fails.
+      // During our own outbound drag (and a short tail after), ignore ALL
+      // drops: the Top layer often still receives the Wayland drop under the
+      // cursor, and treating it as inbound used to put every file back.
       DropArea {
         id: dropArea
         anchors.fill: parent
-        enabled: panelRoot.activeDragTile === null
+        enabled: !panelRoot.suppressInboundDrops && panelRoot.activeDragTile === null
         property bool contains: false
         onEntered: contains = true
         onExited: contains = false
         onDropped: function(drop) {
           contains = false
-          // Any drop reaching this window is "back home": the dragged tile is
-          // still in the model, so finishDrag() must keep it.
-          panelRoot.dropWasInternal = true
-          var wasAll = panelRoot.activeDragWasAll
-          if (wasAll && controller) controller.restoreSnapshot(panelRoot.clearedSnapshot)
-          if (panelRoot.activeDragTile) panelRoot.activeDragTile.finishDrag(false)
-          if (!wasAll) {
-            var urls = drop.urls || []
-            if (urls.length > 0 && controller) controller.addDroppedUris(urls)
+          if (panelRoot.suppressInboundDrops || panelRoot.activeDragTile
+              || panelRoot.activeDragWasAll) {
+            return
           }
+          var urls = drop.urls || []
+          if (urls.length > 0 && controller) controller.addDroppedUris(urls)
         }
       }
 
@@ -592,12 +612,13 @@ Item {
       dragActive = false
       dragArmed = false
       if (panelRoot.activeDragTile === tile) panelRoot.activeDragTile = null
-      var cancelled = panelRoot.dropWasInternal || panelRoot.dragCancelRequested
+      // Esc only — a stolen Wayland drop must not keep the tile.
+      var cancelled = panelRoot.dragCancelRequested
       panelRoot.dropWasInternal = false
       panelRoot.dragCancelRequested = false
+      panelRoot.endOutboundDrag()
       if (controller) controller.stopMoveTracking()
       if (!cancelled && remove !== false) {
-        // Prefer id remove; path fallback covers races with inotify.
         if (tileData && tileData.id) removeRequested()
         else if (tileData && tileData.path && controller)
           controller.removeTileByPath(tileData.path)
@@ -638,6 +659,7 @@ Item {
         if (dist < Qt.styleHints.startDragDistance) return
         panelRoot.dropWasInternal = false
         panelRoot.dragCancelRequested = false
+        panelRoot.beginOutboundDrag()
         panelRoot.activeDragTile = tile
         tile.dragActive = true
         if (tileData.path) controller.startMoveTracking([tileData.path])
@@ -770,16 +792,16 @@ Item {
       var wasAll = panelRoot.activeDragWasAll
       panelRoot.activeDragWasAll = false
       if (panelRoot.activeDragTile === allHandle) panelRoot.activeDragTile = null
-      var wasInternal = panelRoot.dropWasInternal
-      var cancelled = wasInternal || panelRoot.dragCancelRequested
+      // Only Esc (dragCancelRequested) is a real cancel. dropWasInternal used
+      // to fire when the zone stole the Wayland drop and wrongly restored.
+      var cancelled = panelRoot.dragCancelRequested
       panelRoot.dropWasInternal = false
       panelRoot.dragCancelRequested = false
       var snapshot = panelRoot.clearedSnapshot
       panelRoot.clearedSnapshot = []
+      panelRoot.endOutboundDrag()
 
-      if (cancelled || !wasAll) {
-        // Esc / drop-back-home: items should already be restored; if the Esc
-        // key never reached us and only the compositor cancelled, restore now.
+      if (cancelled) {
         if (wasAll && snapshot && snapshot.length > 0 && controller
             && panelRoot.items.length === 0)
           controller.restoreSnapshot(snapshot)
@@ -788,8 +810,13 @@ Item {
         return
       }
 
-      // External finish: always archive + dismiss. Late MOVED_TO still
-      // rewrites archived paths via the move tracker (left running).
+      if (!wasAll) {
+        if (controller) controller.stopMoveTracking()
+        panelRoot.dragAllMoveHits = 0
+        return
+      }
+
+      // External finish: always archive + dismiss.
       panelRoot.dragAllMoveHits = 0
       if (snapshot && snapshot.length > 0 && panelRoot.controller)
         panelRoot.controller.archiveDragAllSnapshot(snapshot)
@@ -864,6 +891,7 @@ Item {
         panelRoot.dragCancelRequested = false
         panelRoot.dragAllMoveHits = 0
         panelRoot.dropWasInternal = false
+        panelRoot.beginOutboundDrag()
         panelRoot.activeDragTile = allHandle
         allHandle.dragActive = true
         var trackPaths = []
