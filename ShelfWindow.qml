@@ -62,9 +62,58 @@ Item {
   // Drag-all uses optimistic clearing: the shelf empties the moment the
   // handle is picked up (Wayland reports IgnoreAction even for successful
   // moves, so waiting for onDragFinished to clear never fired). The snapshot
-  // restores the items on an internal drop or an Esc cancel.
+  // restores on Esc / drop-back-home, and is archived + zone dismissed on a
+  // successful external drop. Late MOVED_TO still rewrites archived paths.
   property bool activeDragWasAll: false
   property var clearedSnapshot: []
+  // Esc often cancels the Wayland drag without delivering Keys.onPressed;
+  // this flag (set by our Esc handlers) distinguishes cancel from deliver.
+  property bool dragCancelRequested: false
+  property int dragAllMoveHits: 0
+
+  // Move tracker callback: rewrite paths on the in-flight drag-all snapshot
+  // so archiveDragAllSnapshot records the destination, not the origin.
+  function repointClearedSnapshot(oldPath, newPath) {
+    if (!Array.isArray(clearedSnapshot) || clearedSnapshot.length === 0) return
+    if (ShelfModel.repointItemsPath(clearedSnapshot, oldPath, newPath)) {
+      clearedSnapshot = ShelfModel.cloneJson(clearedSnapshot)
+      dragAllMoveHits++
+    }
+  }
+
+  function cancelActiveDrag() {
+    if (!panelRoot.activeDragTile) return false
+    panelRoot.dragCancelRequested = true
+    panelRoot.dropWasInternal = true
+    if (panelRoot.activeDragWasAll && controller)
+      controller.restoreSnapshot(panelRoot.clearedSnapshot)
+    panelRoot.activeDragTile.Drag.cancel()
+    panelRoot.activeDragTile.finishDrag(false)
+    return true
+  }
+
+  function handleEscape() {
+    // One Esc entry point: cancel an in-flight drag (keep items + zone),
+    // otherwise dismiss. Debounced so Shortcut + Keys.onPressed for the
+    // same keystroke cannot cancel then immediately close.
+    if (escapeGate.running) return
+    escapeGate.restart()
+    if (panelRoot.cancelActiveDrag()) return
+    panelRoot.requestClose()
+  }
+
+  Timer {
+    id: escapeGate
+    interval: 50
+    repeat: false
+  }
+
+  // Single Esc handler (also covers focus lost to the Wayland drag).
+  Shortcut {
+    sequence: "Escape"
+    enabled: panelRoot.opened
+    onActivated: panelRoot.handleEscape()
+  }
 
   // ---- zone dragging ------------------------------------------------------
   // Local pointer coordinates are computed by the compositor against the
@@ -170,19 +219,7 @@ Item {
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
-            // Mid-tile-drag: cancel the drag and return the tile; a second
-            // Esc (no active drag) closes the zone.
-            if (panelRoot.activeDragTile) {
-              panelRoot.activeDragTile.Drag.cancel()
-              // QtWayland reports IgnoreAction even for successful drops, so
-              // cancel-vs-drop cannot be told apart in onDragFinished: an Esc
-              // during a drag-all restores the snapshot right here.
-              if (panelRoot.activeDragWasAll && controller)
-                controller.addDroppedUris(panelRoot.clearedSnapshot, true)
-              panelRoot.activeDragTile.finishDrag(false)
-            } else {
-              panelRoot.requestClose()
-            }
+            panelRoot.handleEscape()
             event.accepted = true
           }
         }
@@ -201,7 +238,7 @@ Item {
           // still in the model, so finishDrag() must keep it.
           panelRoot.dropWasInternal = true
           var wasAll = panelRoot.activeDragWasAll
-          if (wasAll && controller) controller.addDroppedUris(panelRoot.clearedSnapshot, true)
+          if (wasAll && controller) controller.restoreSnapshot(panelRoot.clearedSnapshot)
           if (panelRoot.activeDragTile) panelRoot.activeDragTile.finishDrag(false)
           if (!wasAll) {
             var urls = drop.urls || []
@@ -487,13 +524,12 @@ Item {
     // from a plain MouseArea (DragHandler's grab never returns after an
     // Automatic drag on Wayland).
     //
-    // End-of-drag truth table:
-    //   drop on another app   -> Drag.onDragFinished(Copy/Move) -> remove
+    // End-of-drag truth table (QtWayland):
+    //   drop on another app   -> onDragFinished(any action) -> remove
     //   drop back on this zone-> DropArea sets dropWasInternal      -> keep
-    //   Esc (keyboard is ours)-> keyCatcher calls Drag.cancel()     -> keep
-    //   compositor cancel     -> onDragFinished(IgnoreAction)       -> keep
-    // onCanceled on the MouseArea is NOT an end signal: it fires exactly when
-    // the system drag takes the grab at start.
+    //   Esc (keyboard is ours)-> keyCatcher calls finishDrag(false) -> keep
+    // IgnoreAction is NOT a cancel: Wayland reports it for successful drops
+    // too (same lesson as drag-all). Esc is the only reliable cancel path.
     property bool dragActive: false
     property bool dragEnding: false
     property bool imageBroken: false
@@ -519,17 +555,26 @@ Item {
 
     // ALWAYS resets the drag state — internal drops included, or the tile
     // stays dimmed and the next drag inherits a poisoned data source.
+    //
+    // `remove` is a hint; cancel flags win. External finishes always drop
+    // the tile (IgnoreAction is not cancel on QtWayland). Esc/DropArea set
+    // dropWasInternal / dragCancelRequested first.
     function finishDrag(remove) {
       if (!dragActive || dragEnding) return
       dragEnding = true
       dragActive = false
       if (panelRoot.activeDragTile === tile) panelRoot.activeDragTile = null
-      var wasInternal = panelRoot.dropWasInternal
+      var cancelled = panelRoot.dropWasInternal || panelRoot.dragCancelRequested
       panelRoot.dropWasInternal = false
-      // External drags keep the watcher alive: the move resolves while the
-      // file lands and the tile repoints itself. Internal/cancel: stop it.
-      if (wasInternal || !remove) controller.stopMoveTracking()
-      if (!wasInternal && remove) removeRequested()
+      panelRoot.dragCancelRequested = false
+      if (controller) controller.stopMoveTracking()
+      if (!cancelled && remove !== false) {
+        // Prefer id remove; path fallback covers races with inotify.
+        if (tileData && tileData.id) removeRequested()
+        else if (tileData && tileData.path && controller)
+          controller.removeTileByPath(tileData.path)
+        if (controller) controller.maybeCloseOnEmpty()
+      }
     }
 
     // Safety net: if Qt ends the drag without delivering onDragFinished (the
@@ -539,11 +584,12 @@ Item {
       running: tile.dragActive
       repeat: true
       onTriggered: if (tile.dragActive && !tile.dragEnding && !tile.Drag.active)
-                     tile.finishDrag(!panelRoot.dropWasInternal)
+                     tile.finishDrag(!panelRoot.dropWasInternal && !panelRoot.dragCancelRequested)
     }
 
     Drag.onDragFinished: function(action) {
-      tile.finishDrag(!panelRoot.dropWasInternal && action !== Qt.IgnoreAction)
+      // action is ignored: QtWayland reports IgnoreAction for real drops.
+      tile.finishDrag(!panelRoot.dropWasInternal && !panelRoot.dragCancelRequested)
     }
 
     MouseArea {
@@ -562,6 +608,7 @@ Item {
         var dist = Math.abs(mouse.x - tile.dragPressPos.x) + Math.abs(mouse.y - tile.dragPressPos.y)
         if (dist < Qt.styleHints.startDragDistance) return
         panelRoot.dropWasInternal = false
+        panelRoot.dragCancelRequested = false
         panelRoot.activeDragTile = tile
         tile.dragActive = true
         if (tileData.path) controller.startMoveTracking([tileData.path])
@@ -679,17 +726,35 @@ Item {
       if (!dragActive || dragEnding) return
       dragEnding = true
       dragActive = false
+      var wasAll = panelRoot.activeDragWasAll
       panelRoot.activeDragWasAll = false
       if (panelRoot.activeDragTile === allHandle) panelRoot.activeDragTile = null
       var wasInternal = panelRoot.dropWasInternal
+      var cancelled = wasInternal || panelRoot.dragCancelRequested
       panelRoot.dropWasInternal = false
-      // Same contract as tiles: keep the watcher for external drops (the
-      // shelf was cleared optimistically and the tracker repoints nothing,
-      // but a future re-add via history stays consistent); stop otherwise.
-      if (wasInternal) controller.stopMoveTracking()
-      // Everything was handed off and the shelf is empty: dismiss the zone.
-      // (Not at pickup — closing the window here would kill the drag.)
-      if (panelRoot.items.length === 0 && panelRoot.controller)
+      panelRoot.dragCancelRequested = false
+      var snapshot = panelRoot.clearedSnapshot
+      panelRoot.clearedSnapshot = []
+
+      if (cancelled || !wasAll) {
+        // Esc / drop-back-home: items should already be restored; if the Esc
+        // key never reached us and only the compositor cancelled, restore now.
+        if (wasAll && snapshot && snapshot.length > 0 && controller
+            && panelRoot.items.length === 0)
+          controller.restoreSnapshot(snapshot)
+        if (controller) controller.stopMoveTracking()
+        panelRoot.dragAllMoveHits = 0
+        return
+      }
+
+      // External finish: always archive + dismiss. Do NOT treat "no MOVED_TO
+      // yet" as cancel — copies never fire it, and moves often arrive after
+      // drag-finished. Late MOVED_TO still rewrites archived paths via the
+      // move tracker (left running on purpose).
+      panelRoot.dragAllMoveHits = 0
+      if (snapshot && snapshot.length > 0 && panelRoot.controller)
+        panelRoot.controller.archiveDragAllSnapshot(snapshot)
+      else if (panelRoot.controller)
         panelRoot.controller.dismiss()
     }
 
@@ -751,10 +816,12 @@ Item {
           "text/plain": paths.join("\n")
         }
         // Optimistic clear: Wayland reports IgnoreAction even for successful
-        // moves, so clearing on drag-finish never fired. The snapshot restores
-        // on internal drops and Esc cancels.
-        panelRoot.clearedSnapshot = uris
+        // moves, so clearing on drag-finish never fired. Keep a FULL item
+        // clone so MOVED_TO can rewrite destinations before we archive.
+        panelRoot.clearedSnapshot = ShelfModel.cloneJson(items)
         panelRoot.activeDragWasAll = true
+        panelRoot.dragCancelRequested = false
+        panelRoot.dragAllMoveHits = 0
         panelRoot.dropWasInternal = false
         panelRoot.activeDragTile = allHandle
         allHandle.dragActive = true
@@ -762,7 +829,8 @@ Item {
         for (var t = 0; t < items.length; t++)
           if (items[t].path) trackPaths.push(items[t].path)
         if (trackPaths.length > 0) controller.startMoveTracking(trackPaths)
-        controller.clearActive()
+        // Skip maybeCloseOnEmpty: the shelf is empty only for the drag UI.
+        controller.clearActive(false)
       }
     }
 

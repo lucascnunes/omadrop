@@ -6,7 +6,9 @@
 # Watches $HOME recursively while a drag is in flight. When one of the given
 # files is MOVED (disappears from its origin and reappears somewhere else
 # with the same name and size), prints "OLDPATH<TAB>NEWPATH" so the shelf can
-# repoint the tile. Copies produce no MOVED_TO and are left untouched.
+# rewrite the item to its new destination (active shelf, drag-all snapshot,
+# and already-archived history). Copies produce no MOVED_TO and are left
+# untouched.
 # Self-terminates after 20s.
 
 set -uo pipefail

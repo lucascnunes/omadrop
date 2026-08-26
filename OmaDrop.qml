@@ -121,8 +121,9 @@ Item {
 
   // ---- move tracking ----------------------------------------------------------
   // While a tile/handle drag is out in the wild, this watcher watches $HOME
-  // for the file being moved and repoints the tile to its new home (a plain
-  // copy never fires MOVED_TO and is left alone).
+  // for the file being moved. A MOVE during single-tile drag removes the
+  // item from the shelf (deliver). During drag-all it rewrites paths on the
+  // in-flight snapshot / history so archive records the destination.
   Process {
     id: moveTracker
     stdout: SplitParser {
@@ -131,18 +132,34 @@ Item {
         if (parts.length !== 2) return
         var oldPath = parts[0]
         var newPath = parts[1]
-        var shelf = ShelfModel.activeShelf(root.state)
-        if (!shelf) return
-        var changed = false
-        for (var i = 0; i < shelf.items.length; i++) {
-          var it = shelf.items[i]
-          if (it.path === oldPath && it.path !== newPath) {
-            it.path = newPath
-            it.uri = ShelfModel.pathToUri(newPath)
-            it.name = ShelfModel.baseName(newPath)
-            changed = true
+
+        // Single-tile deliver: QtWayland often never gives a usable drop
+        // action, so inotify is the source of truth — drop the item now.
+        var singleDrag = shelfWindow && shelfWindow.activeDragTile
+                         && !shelfWindow.activeDragWasAll
+                         && !shelfWindow.dragCancelRequested
+        if (singleDrag) {
+          // Tear down drag bookkeeping BEFORE commitState destroys the Tile.
+          var t = shelfWindow.activeDragTile
+          if (t) {
+            if (t.dragEnding !== undefined) t.dragEnding = true
+            if (t.dragActive !== undefined) t.dragActive = false
+          }
+          shelfWindow.activeDragTile = null
+          shelfWindow.dropWasInternal = false
+          shelfWindow.dragCancelRequested = false
+          root.stopMoveTracking()
+          if (ShelfModel.removeItemByPath(root.state, oldPath)
+              || ShelfModel.removeItemByPath(root.state, newPath)) {
+            root.commitState()
+            root.maybeCloseOnEmpty()
+            return
           }
         }
+
+        var changed = ShelfModel.repointMovedPath(root.state, oldPath, newPath)
+        if (shelfWindow && typeof shelfWindow.repointClearedSnapshot === "function")
+          shelfWindow.repointClearedSnapshot(oldPath, newPath)
         if (changed) root.commitState()
       }
     }
@@ -219,10 +236,10 @@ Item {
   }
 
   // ---- shelf mutations -------------------------------------------------------
-  function clearActive() {
+  function clearActive(allowClose) {
     if (ShelfModel.clearActive(root.state)) {
       root.commitState()
-      root.maybeCloseOnEmpty()
+      if (allowClose !== false) root.maybeCloseOnEmpty()
     }
   }
 
@@ -231,6 +248,30 @@ Item {
       root.commitState()
       root.maybeCloseOnEmpty()
     }
+  }
+
+  function removeTileByPath(path) {
+    if (ShelfModel.removeItemByPath(root.state, path)) {
+      root.commitState()
+      root.maybeCloseOnEmpty()
+    }
+  }
+
+  // Esc / internal drop during drag-all: put the optimistic snapshot back.
+  function restoreSnapshot(items) {
+    if (!items || items.length === 0) return
+    var shelf = ShelfModel.ensureActiveShelf(root.state)
+    shelf.items = ShelfModel.cloneJson(items)
+    shelf.updatedAt = Date.now()
+    root.commitState()
+  }
+
+  // Drag-all handed every item off: file the snapshot (with any MOVED_TO
+  // path rewrites already applied) into history, then close the zone.
+  function archiveDragAllSnapshot(items) {
+    if (ShelfModel.archiveSnapshot(root.state, items, {}))
+      root.commitState()
+    root.dismiss()
   }
 
   // An emptied zone has no reason to keep floating around — unless a drag is

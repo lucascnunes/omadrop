@@ -132,6 +132,15 @@ t("removeItem and clearActive work on the active shelf", function() {
   eq(M.activeShelf(st).items.length, 0)
 })
 
+t("removeItemByPath drops the matching active item", function() {
+  var st = M.emptyState()
+  M.addItems(st, ["/a.txt", "/b.txt"], {})
+  ok(M.removeItemByPath(st, "/a.txt"))
+  eq(M.activeShelf(st).items.length, 1)
+  eq(M.activeShelf(st).items[0].path, "/b.txt")
+  eq(M.removeItemByPath(st, "/missing.txt"), false)
+})
+
 t("archiveCurrent opens a fresh shelf and keeps history", function() {
   var st = M.emptyState()
   M.addItems(st, ["/one.txt"], {})
@@ -155,6 +164,42 @@ t("archiveCurrent is a no-op on an empty shelf", function() {
   M.archiveCurrent(st, {})
   eq(M.serializeState(st), before, "empty shelf must not be archived")
   eq(M.activeShelf(st).items.length, 0)
+})
+
+t("repointMovedPath rewrites active and archived shelves", function() {
+  var st = M.emptyState()
+  M.addItems(st, ["/home/me/a.txt", "/home/me/b.txt"], {})
+  M.archiveCurrent(st, {})
+  M.addItems(st, ["/home/me/c.txt"], {})
+
+  ok(M.repointMovedPath(st, "/home/me/a.txt", "/home/me/Docs/a.txt"))
+  ok(M.repointMovedPath(st, "/home/me/c.txt", "/tmp/c.txt"))
+
+  var archived = null
+  for (var i = 0; i < st.shelves.length; i++)
+    if (st.shelves[i].archivedAt !== null) archived = st.shelves[i]
+  ok(archived, "archived shelf exists")
+  eq(archived.items[0].path, "/home/me/Docs/a.txt")
+  eq(archived.items[0].name, "a.txt")
+  eq(M.activeShelf(st).items[0].path, "/tmp/c.txt")
+})
+
+t("archiveSnapshot files cleared drag-all items into history", function() {
+  var st = M.emptyState()
+  M.addItems(st, ["/old/one.txt", "/old/two.txt"], {})
+  var snap = M.cloneJson(M.activeShelf(st).items)
+  M.clearActive(st)
+  ok(M.repointItemsPath(snap, "/old/one.txt", "/new/one.txt"))
+  ok(M.archiveSnapshot(st, snap, {}))
+  eq(M.activeShelf(st).items.length, 0)
+
+  var archived = null
+  for (var i = 0; i < st.shelves.length; i++)
+    if (st.shelves[i].archivedAt !== null) archived = st.shelves[i]
+  ok(archived)
+  eq(archived.items.length, 2)
+  eq(archived.items[0].path, "/new/one.txt")
+  eq(archived.items[1].path, "/old/two.txt")
 })
 
 t("reopenShelf archives the previously working shelf", function() {

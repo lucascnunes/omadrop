@@ -75,7 +75,13 @@ function safeParse(text) {
 }
 
 function cloneJson(value) {
-  return safeParse(JSON.stringify(value === undefined ? null : value))
+  // Deep-clone via JSON. Unlike safeParse (settings/state objects only),
+  // this must also accept arrays — drag-all snapshots are item lists.
+  try {
+    return JSON.parse(JSON.stringify(value === undefined ? null : value))
+  } catch (e) {
+    return null
+  }
 }
 
 var idCounter = 0
@@ -378,11 +384,78 @@ function removeItem(state, itemId) {
   return false
 }
 
+// Remove by filesystem path (used when a single-tile MOVE is confirmed via
+// inotify — more reliable than Drag.onDragFinished on QtWayland).
+function removeItemByPath(state, path) {
+  if (!path) return false
+  var shelf = activeShelf(state)
+  if (!shelf) return false
+  var removed = false
+  for (var i = shelf.items.length - 1; i >= 0; i--) {
+    if (shelf.items[i] && shelf.items[i].path === path) {
+      shelf.items.splice(i, 1)
+      removed = true
+    }
+  }
+  if (removed) shelf.updatedAt = Date.now()
+  return removed
+}
+
 function clearActive(state) {
   var shelf = activeShelf(state)
   if (!shelf) return false
   shelf.items = []
   shelf.updatedAt = Date.now()
+  return true
+}
+
+// After a filesystem MOVE, retarget every matching item across ALL shelves
+// (active + history). Drag-all clears the active shelf optimistically and
+// archives a snapshot; late MOVED_TO events must still rewrite archived paths.
+function repointMovedPath(state, oldPath, newPath) {
+  if (!state || !oldPath || !newPath || oldPath === newPath) return false
+  var changed = false
+  for (var s = 0; s < state.shelves.length; s++) {
+    var shelf = state.shelves[s]
+    if (!shelf || !Array.isArray(shelf.items)) continue
+    for (var i = 0; i < shelf.items.length; i++) {
+      var it = shelf.items[i]
+      if (it && it.path === oldPath) {
+        it.path = newPath
+        it.uri = pathToUri(newPath)
+        it.name = baseName(newPath)
+        shelf.updatedAt = Date.now()
+        changed = true
+      }
+    }
+  }
+  return changed
+}
+
+// Update paths inside a drag-all snapshot (plain item array, not yet archived).
+function repointItemsPath(items, oldPath, newPath) {
+  if (!Array.isArray(items) || !oldPath || !newPath || oldPath === newPath) return false
+  var changed = false
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i]
+    if (it && it.path === oldPath) {
+      it.path = newPath
+      it.uri = pathToUri(newPath)
+      it.name = baseName(newPath)
+      changed = true
+    }
+  }
+  return changed
+}
+
+// Archive an explicit item snapshot (used after drag-all): the active shelf
+// was cleared at pickup, so archiveCurrent alone would be a no-op.
+function archiveSnapshot(state, items, opts) {
+  if (!state || !Array.isArray(items) || items.length === 0) return false
+  var shelf = ensureActiveShelf(state)
+  shelf.items = cloneJson(items)
+  shelf.updatedAt = Date.now()
+  archiveCurrent(state, opts || {})
   return true
 }
 
@@ -574,7 +647,11 @@ if (typeof module !== "undefined" && module.exports) {
     ensureActiveShelf: ensureActiveShelf,
     addItems: addItems,
     removeItem: removeItem,
+    removeItemByPath: removeItemByPath,
     clearActive: clearActive,
+    repointMovedPath: repointMovedPath,
+    repointItemsPath: repointItemsPath,
+    archiveSnapshot: archiveSnapshot,
     archiveCurrent: archiveCurrent,
     reopenShelf: reopenShelf,
     deleteShelf: deleteShelf,
