@@ -193,8 +193,24 @@ Item {
       Math.min(Math.max(panelRoot.edgeMargin, panelRoot.anchorY),
                Math.max(panelRoot.edgeMargin, panelRoot.monitorHeight - height - panelRoot.edgeMargin)))
 
-    margins.left: clampedX
-    margins.top: clampedY
+    // While a file drag is in flight, park the zone in the top-right corner.
+    // shelfPosition "cursor" otherwise leaves this Top layer under the pointer,
+    // so the DropArea steals the drop from the destination app and "restores"
+    // the shelf (select-all looks like it did nothing).
+    readonly property bool parkForDrag: panelRoot.activeDragTile !== null
+    readonly property int parkedX: Math.round(
+      Math.max(panelRoot.edgeMargin, panelRoot.monitorWidth - width - panelRoot.edgeMargin))
+    readonly property int parkedY: panelRoot.edgeMargin
+
+    margins.left: parkForDrag ? parkedX : clampedX
+    margins.top: parkForDrag ? parkedY : clampedY
+
+    // Empty input region while a file drag is out: the Top layer must not
+    // become the Wayland drop target under the cursor (parking helps; this
+    // guarantees drops reach the destination app). Esc still works via Shortcut.
+    Region { id: passThroughMask }
+    Region { id: cardInputMask; item: card }
+    mask: parkForDrag ? passThroughMask : cardInputMask
 
     // ---- card -----------------------------------------------------------------
     Rectangle {
@@ -226,9 +242,12 @@ Item {
       }
 
       // Files dragged from other apps land here and join the shelf.
+      // Disabled during our own outbound drag so we never treat a stolen
+      // drop as "back home" if parking somehow fails.
       DropArea {
         id: dropArea
         anchors.fill: parent
+        enabled: panelRoot.activeDragTile === null
         property bool contains: false
         onEntered: contains = true
         onExited: contains = false
@@ -532,6 +551,7 @@ Item {
     // too (same lesson as drag-all). Esc is the only reliable cancel path.
     property bool dragActive: false
     property bool dragEnding: false
+    property bool dragArmed: false
     property bool imageBroken: false
     property string dragImageUrl: ""
     property point dragPressPos: Qt.point(0, 0)
@@ -553,6 +573,13 @@ Item {
     opacity: dragActive ? 0.35 : 1.0
     Behavior on opacity { NumberAnimation { duration: 120 } }
 
+    Connections {
+      target: tile.Drag
+      function onActiveChanged() {
+        if (tile.Drag.active) tile.dragArmed = true
+      }
+    }
+
     // ALWAYS resets the drag state — internal drops included, or the tile
     // stays dimmed and the next drag inherits a poisoned data source.
     //
@@ -563,6 +590,7 @@ Item {
       if (!dragActive || dragEnding) return
       dragEnding = true
       dragActive = false
+      dragArmed = false
       if (panelRoot.activeDragTile === tile) panelRoot.activeDragTile = null
       var cancelled = panelRoot.dropWasInternal || panelRoot.dragCancelRequested
       panelRoot.dropWasInternal = false
@@ -583,7 +611,7 @@ Item {
       interval: 120
       running: tile.dragActive
       repeat: true
-      onTriggered: if (tile.dragActive && !tile.dragEnding && !tile.Drag.active)
+      onTriggered: if (tile.dragActive && tile.dragArmed && !tile.dragEnding && !tile.Drag.active)
                      tile.finishDrag(!panelRoot.dropWasInternal && !panelRoot.dragCancelRequested)
     }
 
@@ -600,6 +628,7 @@ Item {
       onPressed: function(mouse) {
         tile.dragPressPos = Qt.point(mouse.x, mouse.y)
         tile.dragEnding = false
+        tile.dragArmed = false
         // Pre-grab the drag preview so it is ready when the threshold hits.
         tile.grabToImage(function(result) { tile.dragImageUrl = result.url })
       }
@@ -701,6 +730,7 @@ Item {
     id: allHandle
     property bool dragActive: false
     property bool dragEnding: false
+    property bool dragArmed: false
     property string dragImageUrl: ""
     property point pressPos: Qt.point(0, 0)
     property var dragMimeData: ({})
@@ -722,10 +752,21 @@ Item {
     Drag.hotSpot: Qt.point(width / 2, height / 2)
     Drag.mimeData: dragMimeData
 
+    // Don't settle the drag until Qt has actually armed it — otherwise the
+    // 120ms timer can finishDrag() before Drag.active flips true and we
+    // archive/restore mid-pickup.
+    Connections {
+      target: allHandle.Drag
+      function onActiveChanged() {
+        if (allHandle.Drag.active) allHandle.dragArmed = true
+      }
+    }
+
     function finishDrag() {
       if (!dragActive || dragEnding) return
       dragEnding = true
       dragActive = false
+      dragArmed = false
       var wasAll = panelRoot.activeDragWasAll
       panelRoot.activeDragWasAll = false
       if (panelRoot.activeDragTile === allHandle) panelRoot.activeDragTile = null
@@ -747,10 +788,8 @@ Item {
         return
       }
 
-      // External finish: always archive + dismiss. Do NOT treat "no MOVED_TO
-      // yet" as cancel — copies never fire it, and moves often arrive after
-      // drag-finished. Late MOVED_TO still rewrites archived paths via the
-      // move tracker (left running on purpose).
+      // External finish: always archive + dismiss. Late MOVED_TO still
+      // rewrites archived paths via the move tracker (left running).
       panelRoot.dragAllMoveHits = 0
       if (snapshot && snapshot.length > 0 && panelRoot.controller)
         panelRoot.controller.archiveDragAllSnapshot(snapshot)
@@ -762,8 +801,9 @@ Item {
       interval: 120
       running: allHandle.dragActive
       repeat: true
-      onTriggered: if (allHandle.dragActive && !allHandle.dragEnding && !allHandle.Drag.active)
-                     allHandle.finishDrag() // already cleared optimistically
+      onTriggered: if (allHandle.dragActive && allHandle.dragArmed
+                       && !allHandle.dragEnding && !allHandle.Drag.active)
+                     allHandle.finishDrag()
     }
 
     Drag.onDragFinished: function(action) {
@@ -796,6 +836,7 @@ Item {
       onPressed: function(mouse) {
         allHandle.pressPos = Qt.point(mouse.x, mouse.y)
         allHandle.dragEnding = false
+        allHandle.dragArmed = false
         allHandle.grabToImage(function(result) { allHandle.dragImageUrl = result.url })
       }
       onPositionChanged: function(mouse) {
