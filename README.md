@@ -105,7 +105,10 @@ omarchy-shell omadrop status    # JSON snapshot of current state
 - **Shake fires too often** — raise `shakeReversals` to 5–6, or pause with
   `omarchy-shell omadrop suspend`.
 - **Capture finds no files** — the focused app must respond to Ctrl+C with
-  `text/uri-list` (Nautilus, Dolphin, Thunar and Nemo all do). Inspect
+  `text/uri-list` (Nautilus, Dolphin, Thunar and Nemo all do). Capture keys
+  go through **ydotool** (kernel-level, immune to input-method conflicts);
+  its daemon auto-starts on first capture and stays resident (~1 MB). With
+  fcitx5 running, wtype alone silently fails — inspect
   `~/.local/state/omadrop/capture.log` with `OMADROP_DEBUG=1`.
 - **Dragging into apps fails** — remote entries (e.g. `network://`) do not
   take part in native drags; local paths do.

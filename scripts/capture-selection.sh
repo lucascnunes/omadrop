@@ -91,12 +91,43 @@ if wl-paste --type text          >"$SNAP/txt"  2>/dev/null && [[ -s $SNAP/txt ]]
 
 # --------------------------------------------------------------------------
 # The invisible internal copy.
-if ! wtype -M ctrl -k c -m ctrl 2>>"$LOG"; then
-  debug "wtype failed (continuing; clipboard may already hold a selection)"
+#
+# wtype acts as a Wayland input method, and only one IM can own the seat —
+# with fcitx5 running it connects fine but keystrokes may never land. ydotool
+# synthesizes at kernel level (uinput) and is immune to that; its daemon is
+# started on demand and left running (tiny, reused by later captures).
+YDOTOOL_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/ydotoold.socket"
+copy_sent="no"
+if [ ! -S "$YDOTOOL_SOCKET" ]; then
+  YDOTOOL_SOCKET="$YDOTOOL_SOCKET" nohup ydotoold -p "$YDOTOOL_SOCKET" >/dev/null 2>&1 &
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [ -S "$YDOTOOL_SOCKET" ] && break
+    sleep 0.1
+  done
 fi
-sleep 0.28
+if [ -S "$YDOTOOL_SOCKET" ]; then
+  if YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key 29:1 46:1 46:0 29:0 2>>"$LOG"; then
+    copy_sent="ydotool"
+  fi
+else
+  debug "ydotoold could not start; falling back to wtype"
+fi
+if [[ $copy_sent == "no" ]]; then
+  if wtype -M ctrl -k c -m ctrl 2>>"$LOG"; then
+    copy_sent="wtype"
+  else
+    debug "no key synthesis available (continuing; clipboard may already hold a selection)"
+  fi
+fi
+debug "copy sent via: $copy_sent"
+sleep 0.3
 
 cap="$(wl-paste --type text/uri-list 2>/dev/null || true)"
+# Some apps only mirror the copy into the primary selection.
+if [[ -z ${cap//[[:space:]]/} ]]; then
+  cap="$(wl-paste --primary --type text/uri-list 2>/dev/null || true)"
+  [[ -n ${cap//[[:space:]]/} ]] && debug "recovered from primary selection"
+fi
 
 restore_previous() {
   # wl-copy forks and keeps serving the clipboard; without the redirects it
