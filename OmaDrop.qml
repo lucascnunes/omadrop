@@ -34,7 +34,6 @@ Item {
 
   // ---- runtime flags ------------------------------------------------------
   property bool opened: false
-  property string view: "shelf"        // shelf | settings
   property bool suspended: false       // session kill-switch for the shake daemon
 
   // ---- settings ------------------------------------------------------------
@@ -97,6 +96,13 @@ Item {
   property bool _writing: false
   property string _pendingWrite: ""
 
+  // Mutation helpers reuse the same state object, and QML var bindings do not
+  // re-fire on an identical reference — reassign a clone so views update.
+  function commitState() {
+    root.state = ShelfModel.cloneJson(root.state)
+    root.saveState()
+  }
+
   function saveState() {
     var json = ShelfModel.serializeState(root.state)
     if (root._writing) { root._pendingWrite = json; return }
@@ -139,8 +145,7 @@ Item {
     }
 
     var outcome = ShelfModel.addItems(root.state, res.paths, { maxItems: root.settings.maxItems })
-    root.state = outcome.state
-    root.saveState()
+    root.commitState()
 
     if (outcome.added > 0) {
       if (root.settings.showNotifications) {
@@ -159,37 +164,35 @@ Item {
     var strings = []
     for (var i = 0; i < urlList.length; i++) strings.push(String(urlList[i]))
     if (strings.length === 0) return
-    var outcome = ShelfModel.addItems(root.state, strings, { maxItems: root.settings.maxItems })
-    root.state = outcome.state
-    root.saveState()
-    if (outcome.added > 0 && root.settings.showNotifications)
-      root.notify("OmaDrop", Strings.t("toastDroppedMany").replace("%1", String(outcome.added)))
+    var before = root.itemCount
+    ShelfModel.addItems(root.state, strings, { maxItems: root.settings.maxItems })
+    root.commitState()
+    var addedCount = root.itemCount - before
+    if (root.settings.showNotifications)
+      root.notify("OmaDrop", Strings.t("toastDroppedMany").replace("%1", String(addedCount)))
   }
 
   // ---- shelf mutations -------------------------------------------------------
   function clearActive() {
-    if (ShelfModel.clearActive(root.state)) root.saveState()
+    if (ShelfModel.clearActive(root.state)) root.commitState()
   }
 
   function removeTile(itemId) {
-    if (ShelfModel.removeItem(root.state, itemId)) root.saveState()
+    if (ShelfModel.removeItem(root.state, itemId)) root.commitState()
   }
 
   function archiveCurrent() {
-    root.state = ShelfModel.archiveCurrent(root.state, {})
-    root.saveState()
+    ShelfModel.archiveCurrent(root.state, {})
+    root.commitState()
     if (root.settings.showNotifications) root.notify("OmaDrop", Strings.t("toastArchived"))
   }
 
   function reopenShelf(id) {
-    if (ShelfModel.reopenShelf(root.state, id)) {
-      root.saveState()
-      root.view = "shelf"
-    }
+    if (ShelfModel.reopenShelf(root.state, id)) root.commitState()
   }
 
   function deleteShelfById(id) {
-    if (ShelfModel.deleteShelf(root.state, id)) root.saveState()
+    if (ShelfModel.deleteShelf(root.state, id)) root.commitState()
   }
 
   function openPath(path) {
@@ -200,16 +203,29 @@ Item {
   // ---- open/close lifecycle ----------------------------------------------------
   // shell.summon routes back into open(); the direct path is the fallback for
   // shells that predate the payload contract.
+  // Settings/history live in the bar widget's popout (SettingsPanel.qml);
+  // summoning them routes there instead of opening the floating zone.
+  function routeToSettingsPopout() {
+    if (shell && shell.bar && typeof shell.bar.summonBarWidget === "function") {
+      shell.bar.summonBarWidget(root.moduleId)
+      return true
+    }
+    return false
+  }
+
+  function openSettingsPopout() { root.routeToSettingsPopout() }
+
   function open(payloadJson) {
     var payload = ShelfModel.safeParse(payloadJson) || {}
-    root.view = (payload.view === "settings" || payload.view === "history") ? payload.view : "shelf"
+    if (payload.view === "settings" || payload.view === "history") {
+      if (root.routeToSettingsPopout()) return
+    }
     root.probeAndShow()
   }
 
   function openShelf(targetView) {
-    var payload = JSON.stringify({ view: targetView || "shelf" })
-    if (shell && typeof shell.summon === "function") shell.summon(root.moduleId, payload)
-    else root.open(payload)
+    if ((targetView === "settings" || targetView === "history") && root.routeToSettingsPopout()) return
+    root.probeAndShow()
   }
 
   function close() {
@@ -347,6 +363,9 @@ Item {
     function archive(): void { root.archiveCurrent() }
     function suspend(): void { root.suspended = true }
     function resume(): void { root.suspended = false }
+    function reopen(id: string): void { root.reopenShelf(String(id || "")) }
+    function removeshelf(id: string): void { root.deleteShelfById(String(id || "")) }
+    function copyline(value: string): void { root.copyText(String(value || "")) }
     function status(): string {
       return JSON.stringify({
         items: root.itemCount,

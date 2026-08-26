@@ -7,7 +7,8 @@ import "ShelfModel.js" as ShelfModel
 import "Strings.js" as Strings
 
 // OmaDrop's bar icon. Left click toggles the floating shelf, right click
-// opens the settings/history view, middle click clears the active shelf.
+// opens the settings/history POPOUT under the icon (hosted here, like every
+// first-party bar widget's panel), middle click clears the active shelf.
 //
 // The badge reads the state file instead of talking to the panel instance:
 // the hybrid manifest means widget and panel are separate QML instances, so
@@ -17,7 +18,7 @@ BarWidget {
   moduleName: "lucas.omadrop"
 
   // The bar sizes this slot from the root's implicit size; the button fills
-  // whatever that ends up being (same contract as omarchy.clock).
+  // whatever that ends up being (same contract as omarchy.microphone).
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -26,8 +27,13 @@ BarWidget {
 
   property int itemCount: 0
 
-  // Deterministic cross-version read: a tiny cat through Process every couple
-  // of seconds keeps the badge honest regardless of FileView watch behavior.
+  // ---- settings ---------------------------------------------------------------
+  // The bar host injects this widget's layout entry into the base `settings`
+  // property (it must stay writable — Bar.qml assigns it directly); we only
+  // forward it down to the popout via injectPanel().
+
+  // ---- badge count ------------------------------------------------------------
+  // Deterministic cross-version read: a tiny cat through Process on a timer.
   Process {
     id: counter
     stdout: StdioCollector {
@@ -51,6 +57,46 @@ BarWidget {
     onTriggered: root.recount()
   }
 
+  // ---- settings popout ----------------------------------------------------------
+  Loader {
+    id: settingsLoader
+    active: true
+    visible: false
+    source: Qt.resolvedUrl("SettingsPanel.qml")
+    onLoaded: {
+      root.injectPanel()
+      Qt.callLater(root.injectPanel)
+    }
+  }
+
+  function injectPanel() {
+    var target = settingsLoader.item
+    if (!target) return
+    if ("bar" in target) target.bar = root.bar
+    if ("settings" in target) target.settings = root.settings
+    if ("anchorItem" in target) target.anchorItem = button
+    if ("hostWidget" in target) target.hostWidget = root
+  }
+
+  onBarChanged: root.injectPanel()
+  onSettingsChanged: root.injectPanel()
+
+  // Shape contract expected by Bar.requestPopout / KeyboardPanel routing.
+  readonly property bool opened: settingsLoader.item ? settingsLoader.item.opened === true : false
+  readonly property bool popoutSwitchClosing:
+    settingsLoader.item ? settingsLoader.item.popoutSwitchClosing === true : false
+
+  // Literal names required by Bar.findPanelWidget's duck-typing.
+  function open() { if (settingsLoader.item) settingsLoader.item.open() }
+  function close() { if (settingsLoader.item) settingsLoader.item.close() }
+  function togglePanel() { if (settingsLoader.item) settingsLoader.item.toggle() }
+  function closeForPopoutSwitch() {
+    if (settingsLoader.item && typeof settingsLoader.item.closeForPopoutSwitch === "function")
+      settingsLoader.item.closeForPopoutSwitch()
+  }
+
+  Component.onCompleted: Qt.callLater(root.injectPanel)
+
   WidgetButton {
     id: button
     anchors.fill: parent
@@ -61,12 +107,10 @@ BarWidget {
     tooltipText: Strings.t("barTooltip")
 
     onPressed: function(b) {
-      // Bar.run is the first-party contract (see omarchy.microphone); the
-      // bar's `shell` property is not guaranteed to be wired for plugins.
       if (!root.bar || typeof root.bar.run !== "function") return
 
       if (b === Qt.RightButton)
-        root.bar.run("omarchy-shell omadrop settings")
+        root.togglePanel()
       else if (b === Qt.MiddleButton)
         root.bar.run("omarchy-shell omadrop clear")
       else
