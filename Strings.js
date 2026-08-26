@@ -1,8 +1,10 @@
-// Tiny i18n for OmaDrop. Follows the session locale (pt_* gets Portuguese,
-// everything else English) with graceful fallbacks. Kept dependency-free so
-// it also loads under node if we ever test it.
+// OmaDrop i18n. The language is passed EXPLICITLY to tLang() from reactive
+// properties (settings.language), so every QML binding re-evaluates when the
+// user switches language in the panel — no shared module state involved.
+// pt_* locales get Portuguese; everything else English.
 //
-// Usage in QML:  Strings.t("newShelf")   /   Strings.t("manyItems").replace("%1", n)
+// Usage:  Strings.tLang(uiLanguage, "key")
+//         Strings.tLang(uiLanguage, "manyItems").replace("%1", n)
 
 var TABLE = {
   en: {
@@ -115,21 +117,19 @@ function localeName() {
   }
 }
 
-// Optional manual override: "en" | "pt" ("" = follow the system locale).
-var languageOverride = ""
-
-function setLanguage(code) {
-  languageOverride = (code === "en" || code === "pt") ? code : ""
-}
-
 function code() {
-  if (languageOverride !== "") return languageOverride
   return localeName().indexOf("pt") === 0 ? "pt" : "en"
 }
 
-function t(key) {
-  var table = TABLE[code()] || TABLE.en
+// lang is "auto" | "en" | "pt" from settings; anything else follows the locale.
+function tLang(lang, key) {
+  var c = (lang === "en" || lang === "pt") ? lang : code()
+  var table = TABLE[c] || TABLE.en
   var value = table[key]
   if (value === undefined) value = TABLE.en[key]
   return value === undefined ? key : value
+}
+
+function t(key) {
+  return tLang("", key)
 }

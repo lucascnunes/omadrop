@@ -72,7 +72,7 @@ Disponíveis no painel (botão 󰤨) e persistidas no seu `shell.json`
 | `shelfPosition` | `cursor` | `cursor`, `topLeft`, `topCenter`, `topRight`, `bottomLeft`, `bottomCenter`, `bottomRight` |
 | `maxItems` | `20` | Limite de itens da shelf ativa |
 | `showNotifications` | `true` | Toasts de "N arquivos na shelf" |
-| `language` | `auto` | Idioma da interface: `auto` (segue o sistema), `en`, `pt` |
+| `language` | `auto` | Idioma da interface: `auto` (segue o sistema), `en`, `pt`. A troca atualiza na hora o painel, a shelf e os toasts |
 | `hotkeyCapture` / `hotkeyOpen` | `SUPER SHIFT, D` / `SUPER SHIFT, A` | Combos editáveis; o chip de copiar do painel emite a linha `o.bind(...)` correspondente |
 
 ### Histórico de shelves ("Nova shelf")
@@ -120,7 +120,9 @@ manifest.json            híbrido bar-widget + panel (keepLoaded)
 OmaDrop.qml              raiz: IPC, settings, estado, daemon, geometria
 BarWidget.qml            ícone da barra + badge (lê shelf.json)
 ShelfWindow.qml          janela layer-shell: tiles drag-out, DropArea, settings
+SettingsPanel.qml        popout de configurações + histórico sob o ícone da barra
 ShelfModel.js            lógica pura (URIs, dedupe, serialização) testável em node
+Strings.js               i18n (en/pt); callers passam settings.language para tLang()
 scripts/capture-selection.sh   clipboard snapshot → wtype → uri-list → restore
 scripts/omadrop-shaked         daemon Python (~80 Hz via socket1 do Hyprland)
 tests/shelf-model-test.js      node tests/shelf-model-test.js

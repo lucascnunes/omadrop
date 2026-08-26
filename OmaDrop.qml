@@ -46,6 +46,9 @@ Item {
     return cfg ? ShelfModel.findBarEntry(cfg, root.moduleId) : null
   }
   readonly property var settings: ShelfModel.normalizeSettings(localSettingsOverride || pluginEntry)
+  // Reactive language for toasts / zone: passed into Strings.tLang so bindings
+  // re-evaluate when the user switches language in SettingsPanel.
+  readonly property string uiLanguage: root.settings.language
 
   function persistSettings(values) {
     var entry = pluginEntry ? ShelfModel.cloneJson(pluginEntry) : { id: root.moduleId }
@@ -177,10 +180,10 @@ Item {
     if (!res.ok) {
       if (res.reason === "terminal-focused") return // stay quiet in terminals
       if (res.reason === "no-selection") {
-        if (root.settings.showNotifications) root.notify("OmaDrop", Strings.t("toastNothing"))
+        if (root.settings.showNotifications) root.notify("OmaDrop", Strings.tLang(root.uiLanguage, "toastNothing"))
         return
       }
-      if (root.settings.showNotifications) root.notify("OmaDrop", Strings.t("toastFailed").replace("%1", res.reason || "?"))
+      if (root.settings.showNotifications) root.notify("OmaDrop", Strings.tLang(root.uiLanguage, "toastFailed").replace("%1", res.reason || "?"))
       return
     }
 
@@ -189,15 +192,15 @@ Item {
 
     if (outcome.added > 0) {
       if (root.settings.showNotifications) {
-        var toast = outcome.added === 1 ? Strings.t("toastShelvedOne")
-                                        : Strings.t("toastShelvedMany").replace("%1", String(outcome.added))
+        var toast = outcome.added === 1 ? Strings.tLang(root.uiLanguage, "toastShelvedOne")
+                                        : Strings.tLang(root.uiLanguage, "toastShelvedMany").replace("%1", String(outcome.added))
         root.notify("OmaDrop", toast)
       }
       // Re-open (and re-anchor to the cursor) on every fresh capture — a
       // closed zone must never force the user to hunt for the bar icon.
       root.openShelf("shelf")
     } else if (outcome.duplicates > 0 && root.settings.showNotifications) {
-      root.notify("OmaDrop", Strings.t("toastDuplicate"))
+      root.notify("OmaDrop", Strings.tLang(root.uiLanguage, "toastDuplicate"))
     }
   }
 
@@ -212,7 +215,7 @@ Item {
     root.commitState()
     var addedCount = root.itemCount - before
     if (addedCount > 0 && !silent && root.settings.showNotifications)
-      root.notify("OmaDrop", Strings.t("toastDroppedMany").replace("%1", String(addedCount)))
+      root.notify("OmaDrop", Strings.tLang(root.uiLanguage, "toastDroppedMany").replace("%1", String(addedCount)))
   }
 
   // ---- shelf mutations -------------------------------------------------------
@@ -240,7 +243,7 @@ Item {
   function archiveCurrent() {
     ShelfModel.archiveCurrent(root.state, {})
     root.commitState()
-    if (root.settings.showNotifications) root.notify("OmaDrop", Strings.t("toastArchived"))
+    if (root.settings.showNotifications) root.notify("OmaDrop", Strings.tLang(root.uiLanguage, "toastArchived"))
   }
 
   function reopenShelf(id) {
@@ -394,16 +397,7 @@ Item {
     }
   }
 
-  property string appliedLanguage: ""
-
-  onSettingsChanged: {
-    Strings.setLanguage(root.settings.language)
-    if (root.settings.language !== root.appliedLanguage) {
-      shelfWindow.langRev++ // zone children were built under the old locale
-      root.appliedLanguage = root.settings.language
-    }
-    syncDaemon()
-  }
+  onSettingsChanged: syncDaemon()
   onSuspendedChanged: syncDaemon()
 
   // ---- small helpers ------------------------------------------------------------------
@@ -426,7 +420,7 @@ Item {
   function copyText(value) {
     copier.command = ["bash", "-c", 'printf "%s" "$1" | wl-copy --type text/plain', "omadrop", String(value)]
     copier.running = true
-    root.notify("OmaDrop", Strings.t("toastCopied"))
+    root.notify("OmaDrop", Strings.tLang(root.uiLanguage, "toastCopied"))
   }
 
   // ---- IPC -------------------------------------------------------------------------------
@@ -466,11 +460,6 @@ Item {
   // ---- wiring -----------------------------------------------------------------------------
   Component.onCompleted: {
     Qt.callLater(function() {
-      Strings.setLanguage(root.settings.language)
-      if (root.settings.language !== root.appliedLanguage) {
-        shelfWindow.langRev++
-        root.appliedLanguage = root.settings.language
-      }
       syncDaemon()
       // FileView may still be loading; adopt whatever is there by then.
       if (root.state.shelves.length === 0) root.adoptState(stateFile.text())

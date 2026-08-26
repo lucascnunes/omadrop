@@ -73,7 +73,7 @@ Available in the panel (the 󰤨 button) and persisted in your `shell.json`
 | `shelfPosition` | `cursor` | `cursor`, `topLeft`, `topCenter`, `topRight`, `bottomLeft`, `bottomCenter`, `bottomRight` |
 | `maxItems` | `20` | Item cap for the active shelf |
 | `showNotifications` | `true` | "N files shelved" toasts |
-| `language` | `auto` | UI language: `auto` (follow system locale), `en`, `pt` |
+| `language` | `auto` | UI language: `auto` (follow system locale), `en`, `pt`. Changing it updates the settings panel, shelf, and toasts immediately |
 | `hotkeyCapture` / `hotkeyOpen` | `SUPER SHIFT, D` / `SUPER SHIFT, A` | Editable combos; the panel's copy chip emits the matching `o.bind(...)` line |
 
 ### Shelf history ("New shelf")
@@ -121,7 +121,9 @@ manifest.json            hybrid bar-widget + panel (keepLoaded)
 OmaDrop.qml              root: IPC, settings, state, daemon, geometry
 BarWidget.qml            bar icon + badge (reads shelf.json)
 ShelfWindow.qml          layer-shell window: drag-out tiles, DropArea, settings
+SettingsPanel.qml        settings + history popout under the bar icon
 ShelfModel.js            pure logic (URIs, dedupe, serialization), node-testable
+Strings.js               i18n (en/pt); callers pass settings.language into tLang()
 scripts/capture-selection.sh   clipboard snapshot → wtype → uri-list → restore
 scripts/omadrop-shaked         Python daemon (~80 Hz over Hyprland socket1)
 tests/shelf-model-test.js      node tests/shelf-model-test.js

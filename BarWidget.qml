@@ -44,10 +44,9 @@ BarWidget {
     onExited: root.itemCount = ShelfModel.countActiveItemsText(counterOut.text)
   }
 
-  readonly property string barTooltip: {
-    Strings.setLanguage(root.settings.language)
-    return Strings.t("barTooltip")
-  }
+  readonly property string uiLanguage: ShelfModel.normalizeSettings(settings).language
+
+  readonly property string barTooltip: Strings.tLang(root.uiLanguage, "barTooltip")
 
   function recount() {
     counter.command = ["bash", "-c", 'cat "$0" 2>/dev/null || true', root.statePath]
@@ -63,19 +62,6 @@ BarWidget {
   }
 
   // ---- settings popout ----------------------------------------------------------
-  // Created lazily AFTER the persisted language is applied, and fully
-  // recreated whenever that language changes: static texts evaluate at
-  // construction, so recreation is the only reliable way to switch them.
-  readonly property string panelLanguage: ShelfModel.normalizeSettings(settings).language
-
-  onPanelLanguageChanged: {
-    Strings.setLanguage(panelLanguage)
-    var wasOpen = settingsLoader.item ? settingsLoader.item.opened === true : false
-    settingsLoader.active = false
-    settingsLoader.active = true
-    if (wasOpen) Qt.callLater(function() { if (settingsLoader.item) settingsLoader.item.open() })
-  }
-
   Loader {
     id: settingsLoader
     active: false
@@ -115,7 +101,6 @@ BarWidget {
 
   Component.onCompleted: {
     Qt.callLater(function() {
-      Strings.setLanguage(panelLanguage)
       settingsLoader.active = true
       root.injectPanel()
     })

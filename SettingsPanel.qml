@@ -24,13 +24,7 @@ Panel {
   property var localSettingsOverride: null
   readonly property var effectiveSettings:
     ShelfModel.normalizeSettings(localSettingsOverride || root.settings)
-  onEffectiveSettingsChanged: Strings.setLanguage(effectiveSettings.language)
-  onOpenedChanged: {
-    Strings.setLanguage(effectiveSettings.language)
-    if (opened) root.pollState()
-  }
-
-  Component.onCompleted: Strings.setLanguage(effectiveSettings.language)
+  onOpenedChanged: if (opened) root.pollState()
 
   function persistSettings(values) {
     // bar.shell.updateEntryInline is not wired for third-party widgets, so
@@ -131,14 +125,14 @@ Panel {
         spacing: Style.space(10)
 
         Text {
-          text: Strings.t("settingsTitle")
+          text: Strings.tLang(effectiveSettings.language, "settingsTitle")
           color: Color.popups.text
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           font.bold: true
         }
 
-        SectionLabel { title: Strings.t("sectionShake") }
+        SectionLabel { title: Strings.tLang(effectiveSettings.language, "sectionShake") }
 
         Row {
           width: parent.width
@@ -147,7 +141,7 @@ Panel {
           Text {
             width: parent.width - shakeToggleRow.width - parent.spacing
             anchors.verticalCenter: parent.verticalCenter
-            text: Strings.t("shakeRow")
+            text: Strings.tLang(effectiveSettings.language, "shakeRow")
             color: Color.popups.text
             font.family: Style.font.family
             font.pixelSize: Style.font.body
@@ -177,13 +171,13 @@ Panel {
             spacing: 2
 
             Text {
-              text: Strings.t("intensityRow")
+              text: Strings.tLang(effectiveSettings.language, "intensityRow")
               color: Color.popups.text
               font.family: Style.font.family
               font.pixelSize: Style.font.body
             }
             Text {
-              text: Strings.t("intensityCaption").replace("%1", String(root.effectiveSettings.shakeReversals))
+              text: Strings.tLang(effectiveSettings.language, "intensityCaption").replace("%1", String(root.effectiveSettings.shakeReversals))
               color: Qt.darker(Color.popups.text, 1.45)
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
@@ -200,14 +194,14 @@ Panel {
           }
         }
 
-        SectionLabel { title: Strings.t("sectionPosition") }
+        SectionLabel { title: Strings.tLang(effectiveSettings.language, "sectionPosition") }
 
         Row {
           spacing: Style.space(6)
 
           Repeater {
             model: [
-              { key: "cursor", label: Strings.t("posCursor") },
+              { key: "cursor", label: Strings.tLang(effectiveSettings.language, "posCursor") },
               { key: "topLeft", label: "↖" },
               { key: "topCenter", label: "↑" },
               { key: "topRight", label: "↗" },
@@ -225,10 +219,10 @@ Panel {
           }
         }
 
-        SectionLabel { title: Strings.t("sectionHotkeys") }
+        SectionLabel { title: Strings.tLang(effectiveSettings.language, "sectionHotkeys") }
 
         HotkeyRow {
-          labelText: Strings.t("hotkeyCapture")
+          labelText: Strings.tLang(effectiveSettings.language, "hotkeyCapture")
           combo: root.effectiveSettings.hotkeyCapture
           hintText: "capture"
           onComboEdited: function(value) { root.persistSettings({ hotkeyCapture: value }) }
@@ -236,14 +230,14 @@ Panel {
         }
 
         HotkeyRow {
-          labelText: Strings.t("hotkeyOpen")
+          labelText: Strings.tLang(effectiveSettings.language, "hotkeyOpen")
           combo: root.effectiveSettings.hotkeyOpen
           hintText: "open"
           onComboEdited: function(value) { root.persistSettings({ hotkeyOpen: value }) }
           onCopyLine: function(line) { root.copyHotkey(line) }
         }
 
-        SectionLabel { title: Strings.t("sectionGeneral") }
+        SectionLabel { title: Strings.tLang(effectiveSettings.language, "sectionGeneral") }
 
         Row {
           width: parent.width
@@ -252,7 +246,7 @@ Panel {
           Text {
             width: parent.width - langRow.width - parent.spacing
             anchors.verticalCenter: parent.verticalCenter
-            text: Strings.t("languageRow")
+            text: Strings.tLang(effectiveSettings.language, "languageRow")
             color: Color.popups.text
             font.family: Style.font.family
             font.pixelSize: Style.font.body
@@ -266,9 +260,9 @@ Panel {
 
             Repeater {
               model: [
-                { key: "auto", label: Strings.t("langAuto") },
-                { key: "en", label: Strings.t("langEn") },
-                { key: "pt", label: Strings.t("langPt") }
+                { key: "auto", label: Strings.tLang(effectiveSettings.language, "langAuto") },
+                { key: "en", label: Strings.tLang(effectiveSettings.language, "langEn") },
+                { key: "pt", label: Strings.tLang(effectiveSettings.language, "langPt") }
               ]
 
               delegate: PositionChip {
@@ -288,7 +282,7 @@ Panel {
           Text {
             width: parent.width - notifyToggle.width - parent.spacing
             anchors.verticalCenter: parent.verticalCenter
-            text: Strings.t("notificationsRow")
+            text: Strings.tLang(effectiveSettings.language, "notificationsRow")
             color: Color.popups.text
             font.family: Style.font.family
             font.pixelSize: Style.font.body
@@ -315,13 +309,13 @@ Panel {
             spacing: 2
 
             Text {
-              text: Strings.t("limitRow")
+              text: Strings.tLang(effectiveSettings.language, "limitRow")
               color: Color.popups.text
               font.family: Style.font.family
               font.pixelSize: Style.font.body
             }
             Text {
-              text: Strings.t("limitCaption")
+              text: Strings.tLang(effectiveSettings.language, "limitCaption")
               color: Qt.darker(Color.popups.text, 1.45)
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
@@ -340,25 +334,25 @@ Panel {
           }
         }
 
-        SectionLabel { title: Strings.t("sectionActions") }
+        SectionLabel { title: Strings.tLang(effectiveSettings.language, "sectionActions") }
 
         Row {
           spacing: Style.space(6)
 
           ChipButton {
-            label: Strings.t("newShelf")
-            tooltipText: Strings.t("newShelfTooltip")
+            label: Strings.tLang(effectiveSettings.language, "newShelf")
+            tooltipText: Strings.tLang(effectiveSettings.language, "newShelfTooltip")
             onClicked: root.runIpc("archive")
           }
 
           ChipButton {
-            label: Strings.t("clearShelf")
-            tooltipText: Strings.t("clearShelfTooltip")
+            label: Strings.tLang(effectiveSettings.language, "clearShelf")
+            tooltipText: Strings.tLang(effectiveSettings.language, "clearShelfTooltip")
             onClicked: root.runIpc("clear")
           }
         }
 
-        SectionLabel { title: Strings.t("sectionHistory") }
+        SectionLabel { title: Strings.tLang(effectiveSettings.language, "sectionHistory") }
 
         Item {
           width: parent.width
@@ -391,7 +385,7 @@ Panel {
 
             Text {
               anchors.centerIn: parent
-              text: Strings.t("historyEmptyShort")
+              text: Strings.tLang(effectiveSettings.language, "historyEmptyShort")
               color: Qt.darker(Color.popups.text, 1.5)
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
@@ -399,7 +393,7 @@ Panel {
           }
         }
 
-        SectionLabel { title: Strings.t("sectionSupport") }
+        SectionLabel { title: Strings.tLang(effectiveSettings.language, "sectionSupport") }
 
         Row {
           spacing: Style.space(6)
@@ -581,7 +575,7 @@ Panel {
     ChipButton {
       id: copyChip
       anchors.verticalCenter: parent.verticalCenter
-      label: Strings.t("copyLine")
+      label: Strings.tLang(effectiveSettings.language, "copyLine")
       property string bindLine: "o.bind(\"" + comboField.text + "\", \"OMADROP " + hintText.toUpperCase() + "\", \"omarchy-shell omadrop " + hintText + "\")"
       tooltipText: bindLine
       onClicked: copyLine(bindLine)
@@ -656,8 +650,8 @@ Panel {
       Text {
         anchors.verticalCenter: parent.verticalCenter
         text: shelf ? "· " + (shelf.items.length === 1
-                               ? Strings.t("oneItem")
-                               : Strings.t("manyItems").replace("%1", String(shelf.items.length))) : ""
+                               ? Strings.tLang(effectiveSettings.language, "oneItem")
+                               : Strings.tLang(effectiveSettings.language, "manyItems").replace("%1", String(shelf.items.length))) : ""
         color: Qt.darker(Color.popups.text, 1.45)
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
@@ -672,13 +666,13 @@ Panel {
 
       IconChip {
         glyph: "󰌷"
-        tooltipText: Strings.t("makeCurrent")
+        tooltipText: Strings.tLang(effectiveSettings.language, "makeCurrent")
         onClicked: if (shelf !== null) openRequested(shelf.id)
       }
 
       IconChip {
         glyph: "󰆴"
-        tooltipText: Strings.t("deleteShelfTip")
+        tooltipText: Strings.tLang(effectiveSettings.language, "deleteShelfTip")
         onClicked: if (shelf !== null) deleteRequested(shelf.id)
       }
     }
