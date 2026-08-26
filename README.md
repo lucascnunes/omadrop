@@ -46,11 +46,11 @@ removing it from the bar disables OmaDrop entirely.
 | Configure | Right-click the bar icon (or the 󰤨 button on the shelf) |
 
 The suggested hotkeys need one line each in `~/.config/hypr/bindings.lua`
-(the settings panel copies ready-made lines):
+(the settings panel copies ready-made lines — combos are editable there):
 
 ```lua
-bind = SUPER SHIFT, D, exec, omarchy-shell omadrop capture
-bind = SUPER SHIFT, A, exec, omarchy-shell omadrop open
+o.bind("SUPER SHIFT, D", "OMADROP CAPTURE", "omarchy-shell omadrop capture")
+o.bind("SUPER SHIFT, A", "OMADROP OPEN", "omarchy-shell omadrop open")
 ```
 
 > **How capture works**: Wayland exposes no "selected files" API, so when you
@@ -144,7 +144,7 @@ Then clean up what the plugin leaves behind:
 rm -rf ~/.local/state/omadrop          # shelf history, logs, daemon lock
 ```
 
-And remove the two `bind = ... omadrop ...` lines you added to
+And remove the two `o.bind(... omadrop ...)` lines you added to
 `~/.config/hypr/bindings.lua`, followed by `omarchy reload hyprland`
 (or `omarchy restart shell`).
 

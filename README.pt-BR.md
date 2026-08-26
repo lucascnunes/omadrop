@@ -46,11 +46,11 @@ removê-lo da barra desliga o OmaDrop inteiro.
 | Configurar | Clique direito no ícone da barra (ou botão 󰤨 na shelf) |
 
 As hotkeys sugeridas precisam de uma linha em `~/.config/hypr/bindings.lua`
-(o painel de configurações copia a linha pronta):
+(o painel de configurações copia a linha pronta — os combos são editáveis):
 
 ```lua
-bind = SUPER SHIFT, D, exec, omarchy-shell omadrop capture
-bind = SUPER SHIFT, A, exec, omarchy-shell omadrop open
+o.bind("SUPER SHIFT, D", "OMADROP CAPTURE", "omarchy-shell omadrop capture")
+o.bind("SUPER SHIFT, A", "OMADROP OPEN", "omarchy-shell omadrop open")
 ```
 
 > **Como a captura funciona**: o Wayland não expõe "arquivos selecionados",
@@ -143,7 +143,7 @@ Depois limpe o que o plugin deixou para trás:
 rm -rf ~/.local/state/omadrop          # histórico de shelves, logs, lock do daemon
 ```
 
-E remova as duas linhas `bind = ... omadrop ...` que você adicionou no
+E remova as duas linhas `o.bind(... omadrop ...)` que você adicionou no
 `~/.config/hypr/bindings.lua`, seguido de `omarchy reload hyprland`
 (ou `omarchy restart shell`).
 

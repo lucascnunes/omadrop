@@ -570,12 +570,14 @@ Panel {
       }
     }
 
+    // bindings.lua is Lua on Omarchy: o.bind("<combo>", "<DESCRIPTION>", "<command>")
     ChipButton {
       id: copyChip
       anchors.verticalCenter: parent.verticalCenter
       label: Strings.t("copyLine")
-      tooltipText: "bind = " + comboField.text + ", exec, omarchy-shell omadrop " + hintText
-      onClicked: copyLine("bind = " + comboField.text + ", exec, omarchy-shell omadrop " + hintText)
+      property string bindLine: "o.bind(\"" + comboField.text + "\", \"OMADROP " + hintText.toUpperCase() + "\", \"omarchy-shell omadrop " + hintText + "\")"
+      tooltipText: bindLine
+      onClicked: copyLine(bindLine)
     }
   }
 
