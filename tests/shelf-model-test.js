@@ -204,6 +204,18 @@ t("countActiveItemsText reads a real file payload", function() {
   eq(M.countActiveItemsText(M.serializeState(st)), 2)
 })
 
+t("makeItem canonicalizes file URIs so drop-vs-clipboard dedupes", function() {
+  var fromDrop = M.makeItem("file:///home/me/pasta (1)/arquivo ç.pdf")
+  var fromClipboard = M.makeItem("file:///home/me/pasta%20%281%29/arquivo%20%C3%A7.pdf")
+  var fromPath = M.makeItem("/home/me/pasta (1)/arquivo ç.pdf")
+  eq(fromDrop.uri, fromPath.uri, "drop vs path")
+  eq(fromClipboard.uri, fromPath.uri, "encoded vs decoded")
+  var st = M.emptyState()
+  M.addItems(st, [fromDrop.uri], {})
+  var second = M.addItems(st, [fromClipboard.uri], {})
+  eq(second.added, 0, "same file must not duplicate")
+})
+
 // ---------------------------------------------------------------------------
 // Capture result parsing
 

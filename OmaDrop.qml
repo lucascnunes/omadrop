@@ -168,7 +168,7 @@ Item {
     ShelfModel.addItems(root.state, strings, { maxItems: root.settings.maxItems })
     root.commitState()
     var addedCount = root.itemCount - before
-    if (root.settings.showNotifications)
+    if (addedCount > 0 && root.settings.showNotifications)
       root.notify("OmaDrop", Strings.t("toastDroppedMany").replace("%1", String(addedCount)))
   }
 

@@ -97,7 +97,6 @@ Panel {
     owner: root.hostWidget || root
     bar: root.bar
     open: root.opened
-    centerOnBar: true
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(root.formWidth)
     contentHeight: panel.fittedContentHeight(flickCol.implicitHeight)

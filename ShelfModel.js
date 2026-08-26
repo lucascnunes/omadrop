@@ -158,6 +158,9 @@ function makeItem(raw) {
   } else if (text.indexOf("://") !== -1) {
     path = uriToPath(text)
     isDir = /\/$/.test(text)
+    // Canonicalize: the same file can arrive percent-encoded (clipboard) or
+    // raw (QML drop.urls); dedupe must see one identity, not two.
+    if (path !== null) uri = pathToUri(path)
   } else {
     return null
   }

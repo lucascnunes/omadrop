@@ -41,6 +41,11 @@ Item {
 
   readonly property var items: controller ? controller.activeItems : []
 
+  // Tiles being dragged from THIS window: the DropArea must ignore them
+  // (re-adding a tile that was dropped back onto the shelf).
+  property int tileDragActive: 0
+  property bool dropWasInternal: false
+
   function glyphForKind(kind) {
     if (kind === "dir") return "󰉋"
     if (kind === "image") return "󰈟"
@@ -118,10 +123,18 @@ Item {
         id: dropArea
         anchors.fill: parent
         property bool contains: false
-        onEntered: contains = true
+        onEntered: function(drag) {
+          if (panelRoot.tileDragActive > 0) { panelRoot.dropWasInternal = true; return }
+          panelRoot.dropWasInternal = false
+          contains = true
+        }
         onExited: contains = false
         onDropped: function(drop) {
           contains = false
+          if (panelRoot.tileDragActive > 0 || panelRoot.dropWasInternal) {
+            panelRoot.dropWasInternal = true
+            return
+          }
           var urls = drop.urls || []
           if (urls.length > 0 && controller) controller.addDroppedUris(urls)
         }
@@ -146,19 +159,25 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.SizeAllCursor
-            property point pressPoint: Qt.point(0, 0)
-            onPressed: function(mouse) { pressPoint = Qt.point(mouse.x, mouse.y) }
+            // Track the pointer in SCREEN coordinates: local coords shift as
+            // the surface moves under it, which makes delta-chasing lag.
+            property point pressGlobal: Qt.point(0, 0)
+            property point pressAnchor: Qt.point(0, 0)
+            onPressed: function(mouse) {
+              pressGlobal = Qt.point(panel.x + mouse.x, panel.y + mouse.y)
+              pressAnchor = Qt.point(panelRoot.anchorX, panelRoot.anchorY)
+            }
             onPositionChanged: function(mouse) {
               if (!pressed) return
-              // Incremental deltas stay correct even while the surface itself
-              // shifts under the pointer.
-              var nextX = panelRoot.anchorX + Math.round(mouse.x - pressPoint.x)
-              var nextY = panelRoot.anchorY + Math.round(mouse.y - pressPoint.y)
-              panelRoot.anchorX = Math.min(Math.max(panelRoot.edgeMargin, nextX),
+              var gx = panel.x + mouse.x
+              var gy = panel.y + mouse.y
+              if (!isFinite(gx) || !isFinite(gy)) return
+              var nx = pressAnchor.x + Math.round(gx - pressGlobal.x)
+              var ny = pressAnchor.y + Math.round(gy - pressGlobal.y)
+              panelRoot.anchorX = Math.min(Math.max(panelRoot.edgeMargin, nx),
                                            Math.max(panelRoot.edgeMargin, panelRoot.monitorWidth - panel.width - panelRoot.edgeMargin))
-              panelRoot.anchorY = Math.min(Math.max(panelRoot.edgeMargin, nextY),
+              panelRoot.anchorY = Math.min(Math.max(panelRoot.edgeMargin, ny),
                                            Math.max(panelRoot.edgeMargin, panelRoot.monitorHeight - panel.height - panelRoot.edgeMargin))
-              pressPoint = Qt.point(mouse.x, mouse.y)
             }
           }
 
@@ -407,6 +426,14 @@ Item {
     DragHandler {
       id: tileDrag
       acceptedButtons: Qt.LeftButton
+      onActiveChanged: panelRoot.tileDragActive += tileDrag.active ? 1 : -1
+    }
+
+    // Leaving the shelf for a real destination clears the tile; the entry
+    // survives inside any archived shelf in history.
+    Drag.onDragFinished: function(action) {
+      if (panelRoot.dropWasInternal) { panelRoot.dropWasInternal = false; return }
+      if (action !== Qt.IgnoreAction) removeRequested()
     }
 
     TapHandler {
@@ -429,6 +456,9 @@ Item {
         width: Style.space(46)
         height: Style.space(46)
         active: tileData && tileData.kind === "image" && tileData.path !== null
+        // An inactive Loader still reserves its size in the Column, pushing
+        // glyph tiles' captions out the bottom — hide it outright.
+        visible: active
         sourceComponent: Image {
           // tileData.uri is already a properly percent-encoded file:// URL.
           source: tileData ? tileData.uri : ""
@@ -474,6 +504,7 @@ Item {
 
       Text {
         anchors.centerIn: parent
+        anchors.horizontalCenterOffset: -1
         text: "󰅖"
         color: "#ffffff"
         font.family: Style.font.family
