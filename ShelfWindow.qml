@@ -591,12 +591,17 @@ Item {
     property string dragImageUrl: ""
     property point dragPressPos: Qt.point(0, 0)
 
-    // Strong JS reference for the payload: a GC-collected QMimeData mid-transfer
-    // segfaults QtWayland's data_source_send (crash report 52bbxq1dkt).
-    property var dragMimeData: ({
-      "text/uri-list": tileData ? (tileData.uri + "\r\n") : "",
-      "text/plain": tileData ? (tileData.path || tileData.uri) : ""
-    })
+    // Frozen at drag start, NEVER bound to tileData. A binding re-evaluates
+    // whenever the model shifts, hands Drag.mimeData a fresh object and
+    // destroys the QMimeData that QtWayland's still-live data source holds —
+    // the compositor then asks it for data and segfaults in
+    // QMimeData::hasImage (crashes 52bbxq1dkt, 52bbip1dkt, 9v77sh2ekt).
+    //
+    // The tile drag triggers that shift on its own: startMoveTracking below
+    // makes a MOVE land as repointMovedPath -> commitState -> new items ->
+    // new tileData. AllDragHandle already assigns imperatively for this
+    // reason; the tile was the half that never got the fix.
+    property var dragMimeData: ({})
 
     Drag.active: dragActive
     Drag.supportedActions: Qt.CopyAction | Qt.MoveAction
@@ -680,6 +685,11 @@ Item {
         panelRoot.dragCancelRequested = false
         panelRoot.beginOutboundDrag()
         panelRoot.activeDragTile = tile
+        // Must land before dragActive flips: Qt reads mimeData when the drag arms.
+        tile.dragMimeData = {
+          "text/uri-list": tileData.uri + "\r\n",
+          "text/plain": tileData.path || tileData.uri
+        }
         tile.dragActive = true
         if (tileData.path && panelRoot.controller)
           panelRoot.controller.startMoveTracking([tileData.path])
