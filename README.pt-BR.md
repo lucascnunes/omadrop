@@ -117,6 +117,7 @@ Strings.js               i18n (en/pt); callers passam settings.language para tLa
 scripts/capture-selection.sh   clipboard snapshot → wtype → uri-list → restore
 scripts/omadrop-shaked         daemon Python (~80 Hz via socket1 do Hyprland)
 tests/shelf-model-test.js      node tests/shelf-model-test.js
+CHANGELOG.md             histórico de releases (inglês)
 ```
 
 Por que Python no detector: o loop é I/O-bound (~0,02 ms/request medido,
