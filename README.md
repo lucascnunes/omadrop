@@ -11,17 +11,8 @@ and a shelf appears near your cursor holding those files while you navigate
 to the real destination — a browser, another app, another workspace — and
 drag them out of it.
 
-```
-┌──────────────────────────────┐
-│ 󰏗 OmaDrop   3 items    󰤨   │
-├──────────────────────────────┤
-│ ┌──────┐ ┌──────┐ ┌──────┐  │
-│ │ 󰈟    │ │ 󰉋    │ │ 󰈦    │  │
-│ │a.png │ │folder│ │rep.pdf│ │
-│ └──────┘ └──────┘ └──────┘  │
-│ [ New shelf ] [ Clear ]      │
-└──────────────────────────────┘
-```
+<img width="1029" height="766" alt="image" src="https://github.com/user-attachments/assets/390d366e-6d5b-46ea-b95c-5ec6c3d70977" />
+
 
 ## Install
 
