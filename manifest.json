@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "lucas.omadrop",
   "name": "OmaDrop",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "author": "Lucas Nunes",
   "description": "Dropzone flutuante estilo Dropover: sacuda o mouse sobre uma sele\u00e7\u00e3o de arquivos (ou use um atalho) para guardar na shelf e arrastar depois para qualquer lugar.",
   "kinds": [

@@ -59,15 +59,14 @@ Item {
   property var activeDragTile: null
   property bool dropWasInternal: false
 
-  // Drag-all keeps items in the model until an external finish archives them
-  // (clearing at pickup hid the drag source and made Wayland bounce the drop
-  // back into our DropArea). Esc cancels with items untouched. External drop
-  // archives + dismisses; late MOVED_TO still rewrites archived paths.
+  // Drag-all clears the shelf at pickup (empty UI during the gesture) but
+  // keeps AllDragHandle visible so the drag source is never torn down.
+  // Esc restores the snapshot; external drop archives + dismisses.
+  // dropWasInternal alone is NOT cancel — stolen Wayland drops used to
+  // restore the shelf. Inbound DropArea is suppressed for the outbound drag.
   property bool activeDragWasAll: false
   property var clearedSnapshot: []
   // Esc sets this; it is the ONLY cancel signal we trust for drag-all.
-  // dropWasInternal alone is NOT cancel — the Top-layer zone often receives
-  // the Wayland drop under the cursor and that used to restore the shelf.
   property bool dragCancelRequested: false
   property int dragAllMoveHits: 0
   // Ignore inbound DropArea events for the whole outbound drag and a short
@@ -107,8 +106,6 @@ Item {
     if (!panelRoot.activeDragTile) return false
     panelRoot.dragCancelRequested = true
     panelRoot.dropWasInternal = true
-    // Drag-all no longer clears the model at pickup — nothing to restore.
-    // (Legacy path: if a build left the shelf empty, put the snapshot back.)
     if (panelRoot.activeDragWasAll && controller
         && panelRoot.items.length === 0 && panelRoot.clearedSnapshot.length > 0)
       controller.restoreSnapshot(panelRoot.clearedSnapshot)
@@ -410,11 +407,6 @@ Item {
             cellHeight: Style.space(104)
 
             model: panelRoot.items
-            // Dim while drag-all is out — do NOT remove items from the model
-            // mid-drag (that hid AllDragHandle and made Qt bounce the drop
-            // back onto the zone, re-adding every file).
-            opacity: panelRoot.activeDragWasAll ? 0.35 : 1.0
-            Behavior on opacity { NumberAnimation { duration: 120 } }
 
             delegate: Tile {
               tileData: modelData
@@ -425,7 +417,7 @@ Item {
 
           EmptyState {
             anchors.fill: parent
-            visible: panelRoot.items.length === 0 && !panelRoot.activeDragWasAll
+            visible: panelRoot.items.length === 0
           }
         }
 
@@ -437,8 +429,9 @@ Item {
           Row {
             spacing: Style.space(6)
 
-            // Stay visible for the whole outbound drag-all (items may still
-            // be in the model; never hide the drag source mid-gesture).
+            // Keep visible while drag-all is in flight even after clearActive
+            // empties the model — hiding the drag source mid-gesture made Qt
+            // deliver the drop back into our DropArea.
             AllDragHandle {
               visible: panelRoot.items.length > 0 || panelRoot.activeDragWasAll
             }
@@ -813,7 +806,6 @@ Item {
       panelRoot.endOutboundDrag()
 
       if (cancelled) {
-        // Items were never removed from the model (or already restored).
         if (wasAll && snapshot && snapshot.length > 0 && controller
             && panelRoot.items.length === 0)
           controller.restoreSnapshot(snapshot)
@@ -828,16 +820,15 @@ Item {
         return
       }
 
-      // External finish: archive snapshot (prefer in-model items if MOVED_TO
-      // already rewrote their paths) and dismiss.
+      // External finish: archive the snapshot and dismiss. Model was already
+      // cleared at pickup; never re-add from DropArea (suppressInboundDrops).
       panelRoot.dragAllMoveHits = 0
-      var toArchive = snapshot
-      if (panelRoot.items.length > 0)
-        toArchive = ShelfModel.cloneJson(panelRoot.items)
-      if (toArchive && toArchive.length > 0 && panelRoot.controller)
-        panelRoot.controller.archiveDragAllSnapshot(toArchive)
-      else if (panelRoot.controller)
+      if (snapshot && snapshot.length > 0 && panelRoot.controller)
+        panelRoot.controller.archiveDragAllSnapshot(snapshot)
+      else if (panelRoot.controller) {
+        if (controller) controller.clearActive(false)
         panelRoot.controller.dismiss()
+      }
     }
 
     Timer {
@@ -874,7 +865,9 @@ Item {
       id: allMouse
       anchors.fill: parent
       hoverEnabled: true
-      enabled: panelRoot.items.length > 0
+      // Stay enabled for the whole drag-all even after clearActive empties
+      // the shelf — disabling the MouseArea mid-gesture kills the drag.
+      enabled: panelRoot.items.length > 0 || allHandle.dragActive || panelRoot.activeDragWasAll
       cursorShape: allHandle.dragActive ? Qt.ClosedHandCursor : Qt.OpenHandCursor
       onPressed: function(mouse) {
         allHandle.pressPos = Qt.point(mouse.x, mouse.y)
@@ -899,9 +892,8 @@ Item {
           "text/uri-list": uris.join("\r\n") + "\r\n",
           "text/plain": paths.join("\n")
         }
-        // Snapshot for archive on success. Do NOT clearActive here — removing
-        // items hides this handle (drag source) and Qt ends up delivering the
-        // drop back to our DropArea, which re-filled the shelf.
+        // Optimistic clear for empty UI during the gesture. Keep this handle
+        // visible (activeDragWasAll) so the drag source is not torn down.
         panelRoot.clearedSnapshot = ShelfModel.cloneJson(items)
         panelRoot.activeDragWasAll = true
         panelRoot.dragCancelRequested = false
@@ -914,6 +906,7 @@ Item {
         for (var t = 0; t < items.length; t++)
           if (items[t].path) trackPaths.push(items[t].path)
         if (trackPaths.length > 0) controller.startMoveTracking(trackPaths)
+        controller.clearActive(false)
       }
     }
 
