@@ -339,6 +339,7 @@ Item {
             spacing: Style.space(8)
 
             Text {
+              textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "󰏗"
               color: Color.accent
@@ -347,6 +348,7 @@ Item {
             }
 
             Text {
+              textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "OmaDrop"
               color: Color.popups.text
@@ -365,6 +367,7 @@ Item {
 
               Text {
                 id: countLabel
+                textFormat: Text.PlainText
                 anchors.centerIn: parent
                 text: (panelRoot.items.length === 1 ? Strings.tLang(uiLanguage, "oneItem")
                                                    : Strings.tLang(uiLanguage, "manyItems").replace("%1", String(panelRoot.items.length)))
@@ -464,6 +467,7 @@ Item {
           // Wrapped on purpose: the hint reads as a caption under the buttons
           // instead of fighting them for one row's width.
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             text: panelRoot.items.length > 0
                   ? Strings.tLang(uiLanguage, "dragHintWithItems")
@@ -494,6 +498,7 @@ Item {
            : "transparent"
 
     Text {
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: iconChip.glyph
       color: Color.popups.text
@@ -534,6 +539,7 @@ Item {
 
     Text {
       id: chipLabel
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: chipButton.label
       color: Color.popups.text
@@ -715,6 +721,7 @@ Item {
       }
 
       Text {
+        textFormat: Text.PlainText
         anchors.horizontalCenter: parent.horizontalCenter
         visible: !(tileData && tileData.kind === "image") || imageBroken
         text: glyphForKind(tileData ? tileData.kind : "file")
@@ -724,6 +731,7 @@ Item {
       }
 
       Text {
+        textFormat: Text.PlainText
         width: tile.width - Style.space(8)
         horizontalAlignment: Text.AlignHCenter
         text: tileData ? tileData.name : ""
@@ -747,6 +755,7 @@ Item {
       color: removeMouse.containsMouse ? Color.urgent : Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, 0.75)
 
       Text {
+        textFormat: Text.PlainText
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: -1
         text: "󰅖"
@@ -868,6 +877,7 @@ Item {
       spacing: Style.space(5)
 
       Text {
+        textFormat: Text.PlainText
         anchors.verticalCenter: parent.verticalCenter
         text: Strings.tLang(uiLanguage, "dragAll")
         color: Color.popups.text
@@ -940,6 +950,7 @@ Item {
       width: parent.width
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         text: "󰋫"
@@ -949,6 +960,7 @@ Item {
       }
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         text: Strings.tLang(uiLanguage, "emptyHint")
