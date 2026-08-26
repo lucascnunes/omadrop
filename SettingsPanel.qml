@@ -33,13 +33,18 @@ Panel {
   Component.onCompleted: Strings.setLanguage(effectiveSettings.language)
 
   function persistSettings(values) {
+    // bar.shell.updateEntryInline is not wired for third-party widgets, so
+    // persistence goes through the supported CLI: one
+    // "omarchy bar set <id> <key> '<value>'" per key (shell-quoted).
     var entry = ShelfModel.cloneJson(root.settings) || {}
     entry.id = root.moduleName
-    for (var key in values) entry[key] = values[key]
+    for (var key in values) {
+      entry[key] = values[key]
+      var safe = String(values[key]).split("'").join("'\\''")
+      if (root.bar && typeof root.bar.run === "function")
+        root.bar.run("omarchy bar set " + root.moduleName + " " + key + " '" + safe + "'")
+    }
     localSettingsOverride = ShelfModel.normalizeSettings(entry)
-    var shellObj = root.bar ? root.bar.shell : null
-    if (shellObj && typeof shellObj.updateEntryInline === "function")
-      shellObj.updateEntryInline(root.moduleName, entry)
   }
 
   // ---- state file mirror (display only; mutations go through IPC) ----------
