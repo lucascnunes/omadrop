@@ -129,6 +129,14 @@ and Python needs no build toolchain in a git-distributed plugin. Documented
 future upgrades: an in-shell detector via `Quickshell.Io.Socket` (saves
 ~20 MB RSS) or a native Hyprland C++ plugin (pointer events and button state).
 
+## Support
+
+OmaDrop is free and open source. If it saves you time every day, consider
+supporting the project:
+
+- ⭐ Star the repo: [github.com/lucascnunes/omadrop](https://github.com/lucascnunes/omadrop)
+- ☕ Buy a coffee: [ko-fi.com/lucascnunes](https://ko-fi.com/lucascnunes)
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

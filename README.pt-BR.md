@@ -128,6 +128,14 @@ toolchain de build num plugin distribuído por git. Upgrades futuros
 documentados: detector dentro do shell via `Quickshell.Io.Socket` (economiza
 ~20 MB RSS) ou plugin C++ nativo do Hyprland (eventos/botões do ponteiro).
 
+## Apoie o projeto
+
+O OmaDrop é gratuito e de código aberto. Se ele te economiza tempo todo dia,
+considere apoiar:
+
+- ⭐ Dê uma estrela no repo: [github.com/lucascnunes/omadrop](https://github.com/lucascnunes/omadrop)
+- ☕ Pague um café: [ko-fi.com/lucascnunes](https://ko-fi.com/lucascnunes)
+
 ## Licença
 
 MIT — veja [LICENSE](LICENSE).

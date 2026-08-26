@@ -181,6 +181,7 @@ Item {
           // Any drop reaching this window is "back home": the dragged tile is
           // still in the model, so finishDrag() must keep it.
           panelRoot.dropWasInternal = true
+          if (panelRoot.activeDragTile) panelRoot.activeDragTile.finishDrag(false)
           var urls = drop.urls || []
           if (urls.length > 0 && controller) controller.addDroppedUris(urls)
         }
@@ -330,6 +331,8 @@ Item {
           Row {
             spacing: Style.space(6)
 
+            AllDragHandle { visible: panelRoot.items.length > 0 }
+
             ChipButton {
               label: Strings.t("newShelf")
               tooltipText: Strings.t("newShelfTooltip")
@@ -473,36 +476,47 @@ Item {
     property string dragImageUrl: ""
     property point dragPressPos: Qt.point(0, 0)
 
+    // Strong JS reference for the payload: a GC-collected QMimeData mid-transfer
+    // segfaults QtWayland's data_source_send (crash report 52bbxq1dkt).
+    property var dragMimeData: ({
+      "text/uri-list": tileData ? (tileData.uri + "\r\n") : "",
+      "text/plain": tileData ? (tileData.path || tileData.uri) : ""
+    })
+
     Drag.active: dragActive
     Drag.supportedActions: Qt.CopyAction | Qt.MoveAction
     Drag.dragType: Drag.Automatic
     Drag.imageSource: dragImageUrl
     Drag.hotSpot: Qt.point(width / 2, height / 2)
-    Drag.mimeData: ({
-      "text/uri-list": tileData ? (tileData.uri + "\r\n") : "",
-      "text/plain": tileData ? (tileData.path || tileData.uri) : ""
-    })
+    Drag.mimeData: dragMimeData
 
     opacity: dragActive ? 0.35 : 1.0
     Behavior on opacity { NumberAnimation { duration: 120 } }
 
-    function finishDrag(external) {
+    // ALWAYS resets the drag state — internal drops included, or the tile
+    // stays dimmed and the next drag inherits a poisoned data source.
+    function finishDrag(remove) {
       if (!dragActive || dragEnding) return
       dragEnding = true
       dragActive = false
       if (panelRoot.activeDragTile === tile) panelRoot.activeDragTile = null
       var wasInternal = panelRoot.dropWasInternal
       panelRoot.dropWasInternal = false
-      if (!wasInternal && external) removeRequested()
+      if (!wasInternal && remove) removeRequested()
     }
 
     // Safety net: if Qt ends the drag without delivering onDragFinished (the
-    // attached flag flips back), treat it as an external drop.
+    // attached flag flips back), settle it — external unless it landed here.
     Timer {
       interval: 120
       running: tile.dragActive
       repeat: true
-      onTriggered: if (!tile.Drag.active && tile.dragActive && !panelRoot.dropWasInternal) tile.finishDrag(true)
+      onTriggered: if (tile.dragActive && !tile.dragEnding && !tile.Drag.active)
+                     tile.finishDrag(!panelRoot.dropWasInternal)
+    }
+
+    Drag.onDragFinished: function(action) {
+      tile.finishDrag(!panelRoot.dropWasInternal && action !== Qt.IgnoreAction)
     }
 
     MouseArea {
@@ -601,6 +615,118 @@ Item {
         cursorShape: Qt.PointingHandCursor
         onClicked: removeRequested()
       }
+    }
+  }
+
+  // Press-and-drag handle that carries every shelf item at once. Same
+  // imperative pattern as the tiles; an external finish clears the shelf,
+  // dropping back in keeps it.
+  component AllDragHandle: Rectangle {
+    id: allHandle
+    property bool dragActive: false
+    property bool dragEnding: false
+    property string dragImageUrl: ""
+    property point pressPos: Qt.point(0, 0)
+    property var dragMimeData: ({})
+
+    width: allRow.implicitWidth + Style.space(18)
+    height: Style.space(26)
+    radius: Style.cornerRadius > 0 ? Style.cornerRadius : 6
+    opacity: enabled ? 1.0 : 0.4
+    color: allMouse.containsMouse || dragActive
+           ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
+           : Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.08)
+    border.width: dragActive ? 1 : 0
+    border.color: Color.accent
+
+    Drag.active: dragActive
+    Drag.supportedActions: Qt.CopyAction | Qt.MoveAction
+    Drag.dragType: Drag.Automatic
+    Drag.imageSource: dragImageUrl
+    Drag.hotSpot: Qt.point(width / 2, height / 2)
+    Drag.mimeData: dragMimeData
+
+    function finishDrag(remove) {
+      if (!dragActive || dragEnding) return
+      dragEnding = true
+      dragActive = false
+      if (panelRoot.activeDragTile === allHandle) panelRoot.activeDragTile = null
+      panelRoot.dropWasInternal = false
+      if (remove && controller) controller.clearActive()
+    }
+
+    Timer {
+      interval: 120
+      running: allHandle.dragActive
+      repeat: true
+      onTriggered: if (allHandle.dragActive && !allHandle.dragEnding && !allHandle.Drag.active)
+                     allHandle.finishDrag(!panelRoot.dropWasInternal)
+    }
+
+    Drag.onDragFinished: function(action) {
+      allHandle.finishDrag(!panelRoot.dropWasInternal && action !== Qt.IgnoreAction)
+    }
+
+    Row {
+      id: allRow
+      anchors.centerIn: parent
+      spacing: Style.space(5)
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        text: "\uDB80\uDFBC"
+        color: Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        text: Strings.t("dragAll")
+        color: Color.popups.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+      }
+    }
+
+    MouseArea {
+      id: allMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      enabled: panelRoot.items.length > 0
+      cursorShape: allHandle.dragActive ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+      onPressed: function(mouse) {
+        allHandle.pressPos = Qt.point(mouse.x, mouse.y)
+        allHandle.dragEnding = false
+        allHandle.grabToImage(function(result) { allHandle.dragImageUrl = result.url })
+      }
+      onPositionChanged: function(mouse) {
+        if (!pressed || allHandle.dragActive) return
+        var dist = Math.abs(mouse.x - allHandle.pressPos.x) + Math.abs(mouse.y - allHandle.pressPos.y)
+        if (dist < Qt.styleHints.startDragDistance || !controller) return
+
+        var uris = []
+        var paths = []
+        var items = panelRoot.items
+        for (var i = 0; i < items.length; i++) {
+          uris.push(items[i].uri)
+          paths.push(items[i].path || items[i].uri)
+        }
+        // Strong ref for the lifetime of the drag (see crash 52bbxq1dkt).
+        allHandle.dragMimeData = {
+          "text/uri-list": uris.join("\r\n") + "\r\n",
+          "text/plain": paths.join("\n")
+        }
+        panelRoot.dropWasInternal = false
+        panelRoot.activeDragTile = allHandle
+        allHandle.dragActive = true
+      }
+    }
+
+    PanelToolTip {
+      visible: allMouse.containsMouse
+      text: Strings.t("dragAllTooltip")
+      fontFamily: Style.font.family
     }
   }
 
