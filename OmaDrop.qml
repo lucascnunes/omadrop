@@ -280,7 +280,9 @@ Item {
 
     var pos = ShelfModel.shelfAnchor(
       root.settings.shelfPosition, monitor, cursor,
-      shelfWindow.cardWidth, shelfWindow.cardEstimatedHeight, shelfWindow.edgeMargin
+      shelfWindow.cardWidth,
+      shelfWindow.cardHeightPx > 0 ? shelfWindow.cardHeightPx : shelfWindow.cardEstimatedHeight,
+      shelfWindow.edgeMargin
     )
     shelfWindow.anchorX = Math.round(pos.x)
     shelfWindow.anchorY = Math.round(pos.y)
@@ -374,7 +376,9 @@ Item {
         suspended: root.suspended,
         daemonRunning: shakeDaemon.running,
         shakeEnabled: root.settings.shakeEnabled,
-        position: root.settings.shelfPosition
+        position: root.settings.shelfPosition,
+        screens: (Quickshell.screens || []).map(function(sc) { return sc.name }),
+        pendingMonitor: root.pendingMonitor
       })
     }
   }
