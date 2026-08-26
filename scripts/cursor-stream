@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""OmaDrop cursor streamer.
+
+Prints the Hyprland cursor position as "x, y" lines (~60 Hz) while alive.
+The zone drag reads these lines because local pointer events go stale while
+the layer surface is being repositioned under the pointer. Started and killed
+by ShelfWindow.qml around header drags, so the resident cost is zero at rest.
+"""
+
+import os
+import socket
+import sys
+import time
+
+xdg = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+path = os.path.join(xdg, "hypr", sig, ".socket.sock")
+
+while True:
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(0.1)
+        s.connect(path)
+        s.sendall(b"cursorpos")
+        buf = b""
+        while True:
+            chunk = s.recv(64)
+            if not chunk:
+                break
+            buf += chunk
+        s.close()
+        text = buf.decode(errors="ignore").strip()
+        if "," in text:
+            sys.stdout.write(text + "\n")
+            sys.stdout.flush()
+    except Exception:
+        pass
+    time.sleep(0.016)

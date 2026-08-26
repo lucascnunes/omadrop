@@ -48,16 +48,48 @@ Item {
 
   readonly property var items: controller ? controller.activeItems : []
 
-  // Tile drags use "pick up" semantics: the tile leaves the grid the moment
-  // the drag starts; dropping it back onto this window re-adds it from
-  // lastDraggedUri (drop.urls can be empty for same-surface drops).
-  property string lastDraggedUri: ""
+  // Tile being dragged, if any — Esc cancels the drag and returns the tile
+  // instead of closing the zone.
+  property var activeDragTile: null
+  property bool dropWasInternal: false
 
   // ---- zone dragging ------------------------------------------------------
-  // The layer surface's top-left IS (anchorX, anchorY), so anchor+local adds
-  // up to true screen coordinates with zero feedback from the surface moving
-  // under the pointer (local-only deltas stall exactly there).
+  // Local pointer coordinates are computed by the compositor against the
+  // surface position at delivery time; while we reposition the surface those
+  // go stale and the window orbits the cursor. The global cursor comes from
+  // Hyprland's IPC socket instead, which is geometry-independent. The reply
+  // is "x, y" with no trailing newline, hence splitMarker " " and a tiny
+  // two-chunk state machine per connection (Hyprland closes after each
+  // reply; the 16ms timer reconnects).
+  property bool draggingZone: false
+  property point zonePressAnchor: Qt.point(0, 0)
+  property point zonePressCursor: Qt.point(-1, -1)
 
+  // Global cursor source while dragging. A tiny python streamer prints
+  // "x, y" lines (~60 Hz) straight from Hyprland's socket: local pointer
+  // events go stale while the surface is repositioned under the pointer, and
+  // the raw-socket variant in QML lost every reply's second number to the
+  // line-splitting parser. The process lives only during the drag.
+  Process {
+    id: cursorStream
+    stdout: SplitParser {
+      onRead: function(data) {
+        var parts = String(data).trim().split(",")
+        if (parts.length !== 2) return
+        var cx = parseFloat(parts[0])
+        var cy = parseFloat(parts[1])
+        if (!isFinite(cx) || !isFinite(cy) || !panelRoot.draggingZone) return
+        if (panelRoot.zonePressCursor.x < 0) { panelRoot.zonePressCursor = Qt.point(cx, cy); return }
+        var nx = panelRoot.zonePressAnchor.x + Math.round(cx - panelRoot.zonePressCursor.x)
+        var ny = panelRoot.zonePressAnchor.y + Math.round(cy - panelRoot.zonePressCursor.y)
+        panelRoot.anchorX = Math.min(Math.max(panelRoot.edgeMargin, nx),
+                                     Math.max(panelRoot.edgeMargin, panelRoot.monitorWidth - panel.width - panelRoot.edgeMargin))
+        panelRoot.anchorY = Math.min(Math.max(panelRoot.edgeMargin, ny),
+                                     Math.max(panelRoot.edgeMargin, panelRoot.monitorHeight - panel.height - panelRoot.edgeMargin))
+      }
+    }
+    stderr: StdioCollector {}
+  }
 
   function glyphForKind(kind) {
     if (kind === "dir") return "󰉋"
@@ -125,7 +157,13 @@ Item {
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
-            panelRoot.requestClose()
+            // Mid-tile-drag: cancel the drag and return the tile; a second
+            // Esc (no active drag) closes the zone.
+            if (panelRoot.activeDragTile) {
+              panelRoot.activeDragTile.Drag.cancel()
+            } else {
+              panelRoot.requestClose()
+            }
             event.accepted = true
           }
         }
@@ -140,9 +178,10 @@ Item {
         onExited: contains = false
         onDropped: function(drop) {
           contains = false
+          // Any drop reaching this window is "back home": the dragged tile is
+          // still in the model, so finishDrag() must keep it.
+          panelRoot.dropWasInternal = true
           var urls = drop.urls || []
-          if (urls.length === 0 && panelRoot.lastDraggedUri !== "")
-            urls = [panelRoot.lastDraggedUri] // same-surface drop: re-add the tile
           if (urls.length > 0 && controller) controller.addDroppedUris(urls)
         }
       }
@@ -166,22 +205,22 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.SizeAllCursor
-            property point pressGlobal: Qt.point(0, 0)
-            property point pressAnchor: Qt.point(0, 0)
             onPressed: function(mouse) {
-              pressGlobal = Qt.point(panelRoot.anchorX + mouse.x, panelRoot.anchorY + mouse.y)
-              pressAnchor = Qt.point(panelRoot.anchorX, panelRoot.anchorY)
+              panelRoot.zonePressAnchor = Qt.point(panelRoot.anchorX, panelRoot.anchorY)
+              panelRoot.zonePressCursor = Qt.point(-1, -1)
+              panelRoot.draggingZone = true
+              if (panelRoot.controller) {
+                cursorStream.command = ["python3", "-u", panelRoot.controller.scriptPath("cursor-stream")]
+                cursorStream.running = true
+              }
             }
-            onPositionChanged: function(mouse) {
-              if (!pressed) return
-              var gx = panelRoot.anchorX + mouse.x
-              var gy = panelRoot.anchorY + mouse.y
-              var nx = pressAnchor.x + Math.round(gx - pressGlobal.x)
-              var ny = pressAnchor.y + Math.round(gy - pressGlobal.y)
-              panelRoot.anchorX = Math.min(Math.max(panelRoot.edgeMargin, nx),
-                                           Math.max(panelRoot.edgeMargin, panelRoot.monitorWidth - panel.width - panelRoot.edgeMargin))
-              panelRoot.anchorY = Math.min(Math.max(panelRoot.edgeMargin, ny),
-                                           Math.max(panelRoot.edgeMargin, panelRoot.monitorHeight - panel.height - panelRoot.edgeMargin))
+            onReleased: function(mouse) {
+              panelRoot.draggingZone = false
+              cursorStream.running = false
+            }
+            onCanceled: {
+              panelRoot.draggingZone = false
+              cursorStream.running = false
             }
           }
 
@@ -418,37 +457,77 @@ Item {
                   ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.55)
                   : Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.12)
 
-    // Native Wayland drag carrying this entry's URI.
-    Drag.active: tileDrag.active
+    // Native Wayland drag carrying this entry's URI, initiated imperatively
+    // from a plain MouseArea (DragHandler's grab never returns after an
+    // Automatic drag on Wayland).
+    //
+    // End-of-drag truth table:
+    //   drop on another app   -> Drag.onDragFinished(Copy/Move) -> remove
+    //   drop back on this zone-> DropArea sets dropWasInternal      -> keep
+    //   Esc (keyboard is ours)-> keyCatcher calls Drag.cancel()     -> keep
+    //   compositor cancel     -> onDragFinished(IgnoreAction)       -> keep
+    // onCanceled on the MouseArea is NOT an end signal: it fires exactly when
+    // the system drag takes the grab at start.
+    property bool dragActive: false
+    property bool dragEnding: false
+    property string dragImageUrl: ""
+    property point dragPressPos: Qt.point(0, 0)
+
+    Drag.active: dragActive
     Drag.supportedActions: Qt.CopyAction | Qt.MoveAction
     Drag.dragType: Drag.Automatic
+    Drag.imageSource: dragImageUrl
+    Drag.hotSpot: Qt.point(width / 2, height / 2)
     Drag.mimeData: ({
       "text/uri-list": tileData ? (tileData.uri + "\r\n") : "",
       "text/plain": tileData ? (tileData.path || tileData.uri) : ""
     })
 
-    // "Pick up" semantics: the drag start removes the tile from the grid
-    // (Wayland never delivers Drag.onDragFinished, so end-of-drag hooks are
-    // unreliable). Dropping back onto the shelf re-adds it via the DropArea.
-    DragHandler {
-      id: tileDrag
-      acceptedButtons: Qt.LeftButton
-      onActiveChanged: {
-        if (!tileDrag.active || !tileData) return
-        panelRoot.lastDraggedUri = tileData.uri
-        removeRequested()
-      }
+    opacity: dragActive ? 0.35 : 1.0
+    Behavior on opacity { NumberAnimation { duration: 120 } }
+
+    function finishDrag(external) {
+      if (!dragActive || dragEnding) return
+      dragEnding = true
+      dragActive = false
+      if (panelRoot.activeDragTile === tile) panelRoot.activeDragTile = null
+      var wasInternal = panelRoot.dropWasInternal
+      panelRoot.dropWasInternal = false
+      if (!wasInternal && external) removeRequested()
     }
 
-    TapHandler {
-      onDoubleTapped: openRequested()
+    // Safety net: if Qt ends the drag without delivering onDragFinished (the
+    // attached flag flips back), treat it as an external drop.
+    Timer {
+      interval: 120
+      running: tile.dragActive
+      repeat: true
+      onTriggered: if (!tile.Drag.active && tile.dragActive && !panelRoot.dropWasInternal) tile.finishDrag(true)
     }
 
     MouseArea {
       id: tileMouse
       anchors.fill: parent
       hoverEnabled: true
-      acceptedButtons: Qt.NoButton // clicks belong to TapHandler; drags to DragHandler
+      cursorShape: tile.dragActive ? Qt.ClosedHandCursor : Qt.ArrowCursor
+      onPressed: function(mouse) {
+        tile.dragPressPos = Qt.point(mouse.x, mouse.y)
+        tile.dragEnding = false
+        // Pre-grab the drag preview so it is ready when the threshold hits.
+        tile.grabToImage(function(result) { tile.dragImageUrl = result.url })
+      }
+      onPositionChanged: function(mouse) {
+        if (!pressed || tile.dragActive || !tileData) return
+        var dist = Math.abs(mouse.x - tile.dragPressPos.x) + Math.abs(mouse.y - tile.dragPressPos.y)
+        if (dist < Qt.styleHints.startDragDistance) return
+        panelRoot.dropWasInternal = false
+        panelRoot.activeDragTile = tile
+        tile.dragActive = true
+      }
+      // onCanceled is deliberately NOT an end: it fires when the system drag
+      // takes the grab at start. The end arrives via onDragFinished or the
+      // poll above.
+      onDoubleClicked: openRequested()
     }
 
     Column {
