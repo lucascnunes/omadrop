@@ -47,6 +47,7 @@ Item {
   function requestClose() { if (controller) controller.dismiss() }
 
   readonly property var items: controller ? controller.activeItems : []
+  readonly property bool dragInProgress: draggingZone || activeDragTile !== null
 
   // Tile being dragged, if any — Esc cancels the drag and returns the tile
   // instead of closing the zone.
@@ -188,11 +189,10 @@ Item {
           // Any drop reaching this window is "back home": the dragged tile is
           // still in the model, so finishDrag() must keep it.
           panelRoot.dropWasInternal = true
+          var wasAll = panelRoot.activeDragWasAll
+          if (wasAll && controller) controller.addDroppedUris(panelRoot.clearedSnapshot, true)
           if (panelRoot.activeDragTile) panelRoot.activeDragTile.finishDrag(false)
-          if (panelRoot.activeDragWasAll) {
-            // Drag-all came home: put everything back, quietly.
-            if (controller) controller.addDroppedUris(panelRoot.clearedSnapshot, true)
-          } else {
+          if (!wasAll) {
             var urls = drop.urls || []
             if (urls.length > 0 && controller) controller.addDroppedUris(urls)
           }
@@ -665,6 +665,10 @@ Item {
       panelRoot.activeDragWasAll = false
       if (panelRoot.activeDragTile === allHandle) panelRoot.activeDragTile = null
       panelRoot.dropWasInternal = false
+      // Everything was handed off and the shelf is empty: dismiss the zone.
+      // (Not at pickup — closing the window here would kill the drag.)
+      if (panelRoot.items.length === 0 && panelRoot.controller)
+        panelRoot.controller.dismiss()
     }
 
     Timer {

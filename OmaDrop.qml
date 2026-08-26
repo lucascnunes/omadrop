@@ -153,7 +153,9 @@ Item {
                                         : Strings.t("toastShelvedMany").replace("%1", String(outcome.added))
         root.notify("OmaDrop", toast)
       }
-      if (!root.opened) root.openShelf("shelf")
+      // Re-open (and re-anchor to the cursor) on every fresh capture — a
+      // closed zone must never force the user to hunt for the bar icon.
+      root.openShelf("shelf")
     } else if (outcome.duplicates > 0 && root.settings.showNotifications) {
       root.notify("OmaDrop", Strings.t("toastDuplicate"))
     }
@@ -188,9 +190,11 @@ Item {
     }
   }
 
-  // An emptied zone has no reason to keep floating around.
+  // An emptied zone has no reason to keep floating around — unless a drag is
+  // still in progress (drag-all clears optimistically at pickup).
   function maybeCloseOnEmpty() {
-    if (root.opened && root.itemCount === 0) root.dismiss()
+    if (root.opened && root.itemCount === 0 && !shelfWindow.dragInProgress)
+      root.dismiss()
   }
 
   function archiveCurrent() {
