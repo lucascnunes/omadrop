@@ -98,19 +98,24 @@ if wl-paste --type text          >"$SNAP/txt"  2>/dev/null && [[ -s $SNAP/txt ]]
 # started on demand and left running (tiny, reused by later captures).
 YDOTOOL_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/ydotoold.socket"
 copy_sent="no"
-if [ ! -S "$YDOTOOL_SOCKET" ]; then
+# A dead daemon leaves the socket file behind; probe before trusting it.
+probe_daemon() {
+  [ -S "$YDOTOOL_SOCKET" ] && YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key 194:1 194:0 2>>"$LOG"
+}
+if probe_daemon; then
+  copy_sent="ydotool"
+else
+  rm -f "$YDOTOOL_SOCKET"
   YDOTOOL_SOCKET="$YDOTOOL_SOCKET" nohup ydotoold -p "$YDOTOOL_SOCKET" >/dev/null 2>&1 &
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     [ -S "$YDOTOOL_SOCKET" ] && break
     sleep 0.1
   done
-fi
-if [ -S "$YDOTOOL_SOCKET" ]; then
-  if YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key 29:1 46:1 46:0 29:0 2>>"$LOG"; then
+  if probe_daemon; then
     copy_sent="ydotool"
+  else
+    debug "ydotoold could not start; falling back to wtype"
   fi
-else
-  debug "ydotoold could not start; falling back to wtype"
 fi
 if [[ $copy_sent == "no" ]]; then
   if wtype -M ctrl -k c -m ctrl 2>>"$LOG"; then
