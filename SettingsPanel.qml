@@ -30,6 +30,8 @@ Panel {
     if (opened) root.pollState()
   }
 
+  Component.onCompleted: Strings.setLanguage(effectiveSettings.language)
+
   function persistSettings(values) {
     var entry = ShelfModel.cloneJson(root.settings) || {}
     entry.id = root.moduleName
@@ -648,7 +650,9 @@ Panel {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        text: shelf ? "· " + shelf.items.length + (shelf.items.length === 1 ? " item" : " itens") : ""
+        text: shelf ? "· " + (shelf.items.length === 1
+                               ? Strings.t("oneItem")
+                               : Strings.t("manyItems").replace("%1", String(shelf.items.length))) : ""
         color: Qt.darker(Color.popups.text, 1.45)
         font.family: Style.font.family
         font.pixelSize: Style.font.caption

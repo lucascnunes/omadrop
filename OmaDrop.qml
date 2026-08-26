@@ -398,9 +398,10 @@ Item {
 
   onSettingsChanged: {
     Strings.setLanguage(root.settings.language)
-    if (root.appliedLanguage !== "" && root.settings.language !== root.appliedLanguage)
-      shelfWindow.langRev++
-    root.appliedLanguage = root.settings.language
+    if (root.settings.language !== root.appliedLanguage) {
+      shelfWindow.langRev++ // zone children were built under the old locale
+      root.appliedLanguage = root.settings.language
+    }
     syncDaemon()
   }
   onSuspendedChanged: syncDaemon()
@@ -466,7 +467,10 @@ Item {
   Component.onCompleted: {
     Qt.callLater(function() {
       Strings.setLanguage(root.settings.language)
-      root.appliedLanguage = root.settings.language
+      if (root.settings.language !== root.appliedLanguage) {
+        shelfWindow.langRev++
+        root.appliedLanguage = root.settings.language
+      }
       syncDaemon()
       // FileView may still be loading; adopt whatever is there by then.
       if (root.state.shelves.length === 0) root.adoptState(stateFile.text())

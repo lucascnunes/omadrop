@@ -63,9 +63,22 @@ BarWidget {
   }
 
   // ---- settings popout ----------------------------------------------------------
+  // Created lazily AFTER the persisted language is applied, and fully
+  // recreated whenever that language changes: static texts evaluate at
+  // construction, so recreation is the only reliable way to switch them.
+  readonly property string panelLanguage: ShelfModel.normalizeSettings(settings).language
+
+  onPanelLanguageChanged: {
+    Strings.setLanguage(panelLanguage)
+    var wasOpen = settingsLoader.item ? settingsLoader.item.opened === true : false
+    settingsLoader.active = false
+    settingsLoader.active = true
+    if (wasOpen) Qt.callLater(function() { if (settingsLoader.item) settingsLoader.item.open() })
+  }
+
   Loader {
     id: settingsLoader
-    active: true
+    active: false
     visible: false
     source: Qt.resolvedUrl("SettingsPanel.qml")
     onLoaded: {
@@ -100,7 +113,13 @@ BarWidget {
       settingsLoader.item.closeForPopoutSwitch()
   }
 
-  Component.onCompleted: Qt.callLater(root.injectPanel)
+  Component.onCompleted: {
+    Qt.callLater(function() {
+      Strings.setLanguage(panelLanguage)
+      settingsLoader.active = true
+      root.injectPanel()
+    })
+  }
 
   WidgetButton {
     id: button
