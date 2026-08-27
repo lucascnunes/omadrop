@@ -6,10 +6,13 @@ Dropzone flutuante para o [Omarchy](https://omarchy.org/) inspirada no
 [Dropover](https://dropoverapp.com/) (macOS): *collect files in a temporary
 shelf, then move, share, or process everything at once.*
 
-Selecione arquivos no gerenciador de arquivos, **sacuda o mouse** (ou use uma
-hotkey) e uma shelf aparece junto ao cursor segurando os arquivos enquanto
-você navega até o destino real — navegador, outro app, outra workspace — e
-arrasta os itens de lá.
+**Sacuda o mouse** e uma shelf aparece bem embaixo do cursor. Arraste
+arquivos para dentro dela — inclusive arquivos que você já está arrastando —
+e leve tudo até o destino real: navegador, outro app, outra workspace. Lá
+você arrasta os itens para fora.
+
+Sacudir apenas abre a shelf; nunca pega arquivos sozinho. Para guardar a
+seleção atual sem arrastar, use a hotkey de captura.
 
 <img width="1029" height="766" alt="image" src="https://github.com/user-attachments/assets/e62d8aad-86cc-4011-9f16-484484aa4479" />
 
@@ -30,7 +33,8 @@ removê-lo da barra desliga o OmaDrop inteiro.
 
 | Ação | Como |
 |---|---|
-| Capturar a seleção | Sacuda o mouse sobre os arquivos selecionados, **ou** pressione `Super+Shift+D`, **ou** clique-direito no ícone |
+| Abrir uma shelf sob o cursor | **Sacuda o mouse** — inclusive durante um arraste: a shelf aparece sob os arquivos que você já carrega |
+| Capturar a seleção | Pressione `Super+Shift+D`, **ou** clique-direito no ícone |
 | Abrir a shelf atual | `Super+Shift+A` ou clique esquerdo no ícone |
 | Guardar arrastando | Arraste arquivos de qualquer app **para dentro** da shelf |
 | Usar a shelf | Arraste um tile para qualquer aplicativo (upload no navegador, anexo no e-mail, mover no gerenciador de arquivos…) — duplo-clique abre o arquivo |
@@ -76,6 +80,7 @@ ou apague entradas antigas. O estado vive em
 ## IPC (para scripts e keybinds)
 
 ```bash
+omarchy-shell omadrop shake     # abre uma shelf sob o cursor (o que o shake faz)
 omarchy-shell omadrop capture   # seleção -> shelf (pipeline completo)
 omarchy-shell omadrop clip      # lê só o clipboard atual
 omarchy-shell omadrop open      # mostra a shelf
@@ -92,7 +97,7 @@ omarchy-shell omadrop status    # JSON com estado atual
 
 - **Shake não dispara** — veja `~/.local/state/omadrop/shaked.log`; aumente a
   sensibilidade (`shakeReversals: 3`). Teste sem risco com
-  `omarchy-shell omadrop capture`.
+  `omarchy-shell omadrop shake`.
 - **Shake dispara demais** — suba `shakeReversals` para 5–6, ou suspenda com
   `omarchy-shell omadrop suspend`.
 - **Captura não acha arquivos** — o app focado precisa responder a Ctrl+C com

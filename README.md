@@ -6,10 +6,13 @@ A floating dropzone for [Omarchy](https://omarchy.org/) inspired by
 [Dropover](https://dropoverapp.com/) (macOS): *collect files in a temporary
 shelf, then move, share, or process everything at once.*
 
-Select files in your file manager, **shake the mouse** (or press a hotkey),
-and a shelf appears near your cursor holding those files while you navigate
-to the real destination — a browser, another app, another workspace — and
-drag them out of it.
+**Shake the mouse** and a shelf appears right under your cursor. Drag files
+into it — including files you are already dragging — then carry them to the
+real destination: a browser, another app, another workspace. Drag them out of
+it there.
+
+The shake only opens the shelf; it never grabs files on its own. To shelve the
+current selection without dragging, press the capture hotkey.
 
 <img width="1029" height="766" alt="image" src="https://github.com/user-attachments/assets/390d366e-6d5b-46ea-b95c-5ec6c3d70977" />
 
@@ -30,7 +33,8 @@ removing it from the bar disables OmaDrop entirely.
 
 | Action | How |
 |---|---|
-| Capture the selection | Shake the mouse over selected files, **or** press `Super+Shift+D`, **or** right-click the bar icon |
+| Open a shelf under the cursor | **Shake the mouse** — mid-drag too: the shelf appears under the files you are already carrying |
+| Capture the selection | Press `Super+Shift+D`, **or** right-click the bar icon |
 | Open the current shelf | `Super+Shift+A` or left-click the icon |
 | Collect by dragging | Drag files from any app **into** the shelf |
 | Use the shelf | Drag a tile into any application (browser upload, e-mail attachment, file manager move…) — double-click opens the file |
@@ -77,6 +81,7 @@ survives shell restarts.
 ## IPC (for scripts and keybinds)
 
 ```bash
+omarchy-shell omadrop shake     # opens a shelf under the cursor (what a shake does)
 omarchy-shell omadrop capture   # selection -> shelf (full pipeline)
 omarchy-shell omadrop clip      # reads the current clipboard only
 omarchy-shell omadrop open      # shows the shelf
@@ -93,7 +98,7 @@ omarchy-shell omadrop status    # JSON snapshot of current state
 
 - **Shake never fires** — check `~/.local/state/omadrop/shaked.log`; raise
   sensitivity (`shakeReversals: 3`). Smoke-test risk-free with
-  `omarchy-shell omadrop capture`.
+  `omarchy-shell omadrop shake`.
 - **Shake fires too often** — raise `shakeReversals` to 5–6, or pause with
   `omarchy-shell omadrop suspend`.
 - **Capture finds no files** — the focused app must respond to Ctrl+C with
