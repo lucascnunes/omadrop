@@ -141,14 +141,44 @@ clear_stale_uris() {
 # started on demand and left running (tiny, reused by later captures).
 YDOTOOL_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/ydotoold.socket"
 copy_sent="no"
+
+# ydotool injects discrete press and release events at the kernel (uinput)
+# layer, so an interrupted sequence leaves the key HELD for the entire
+# desktop, not just for us — a stuck modifier or letter survives this script
+# and auto-repeats into whatever is focused. A held letter also drops file
+# managers into type-ahead find, where Ctrl+C copies the search box instead of
+# the selection, which is how a stuck key turns into a silent "no-selection".
+#
+# Releasing a key that is not currently held is a no-op, so this is safe to
+# call at any point, including twice.
+release_keys() {
+  [ -S "$YDOTOOL_SOCKET" ] || return 0
+  # ctrl/shift/alt/meta (both sides), C, and the F24 probe key below.
+  YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key -d 5 \
+    29:0 97:0 42:0 54:0 56:0 100:0 125:0 126:0 46:0 194:0 2>>"$LOG" || true
+  return 0
+}
+
+# Widen the existing cleanup so nothing stays latched even if this script is
+# killed mid-sequence.
+trap 'release_keys; rm -rf "$SNAP"' EXIT
+
 # A dead daemon leaves the socket file behind; probe before trusting it.
 probe_daemon() {
-  [ -S "$YDOTOOL_SOCKET" ] && YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key -d 30 194:1 194:0 2>>"$LOG"
+  [ -S "$YDOTOOL_SOCKET" ] || return 1
+  YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key -d 30 194:1 194:0 2>>"$LOG"
+  local rc=$?
+  release_keys
+  return $rc
 }
 send_ctrl_c() {
   # 29 = LeftCtrl, 46 = C. -d 30 spaces the events: back-to-back key events
   # get dropped by some apps.
+  release_keys   # start from a known-clean state, whatever ran before us
   YDOTOOL_SOCKET="$YDOTOOL_SOCKET" ydotool key -d 30 29:1 46:1 46:0 29:0 2>>"$LOG"
+  local rc=$?
+  release_keys   # and never leave anything held, including on failure
+  return $rc
 }
 clear_stale_uris
 if probe_daemon; then
