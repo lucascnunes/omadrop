@@ -29,6 +29,16 @@ omarchy plugin enable lucas.omadrop
 O ícone **󰏗** entra na barra (seção direita). Ele é o corpo do plugin:
 removê-lo da barra desliga o OmaDrop inteiro.
 
+Depois de **atualizar** uma instalação existente, reinicie o shell:
+
+```bash
+omarchy-restart-shell
+```
+
+Editar arquivos do plugin recarrega o QML, mas um verbo IPC novo só é
+registrado num restart completo do shell — sem isso o shake não alcança nada e
+falha em silêncio.
+
 ## Uso
 
 | Ação | Como |

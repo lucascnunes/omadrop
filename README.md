@@ -29,6 +29,16 @@ omarchy plugin enable lucas.omadrop
 The **󰏗** icon joins the bar (right section). It is the body of the plugin:
 removing it from the bar disables OmaDrop entirely.
 
+After **updating** an existing install, restart the shell:
+
+```bash
+omarchy-restart-shell
+```
+
+Editing plugin files hot-reloads the QML, but a new IPC verb is only registered
+on a full shell restart — without it a shake reaches nothing and silently does
+nothing.
+
 ## Usage
 
 | Action | How |
