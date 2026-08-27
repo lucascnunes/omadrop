@@ -2,6 +2,38 @@
 
 All notable changes to OmaDrop. Versions follow [semantic versioning](https://semver.org/).
 
+## [1.3.0] — 2026-08-27
+
+### Changed
+
+**Shaking the mouse now opens the shelf instead of grabbing the selection.** A shake used to
+run a synthetic Ctrl+C and shelve whatever happened to be selected — which meant any stray
+selection anywhere could be swept up by an accidental shake, and every shake had to
+synthesize a keystroke. Now the shelf simply appears under the cursor and waits for you to
+drag files into it.
+
+This is what makes the gesture work **mid-drag**: shake while already carrying files and the
+shelf appears underneath them, ready for the drop. Wayland offers no way to read or finish
+another application's drag, so nothing detects the drag — the shelf just shows up where your
+hand already is.
+
+The shake always opens at the cursor, whatever `shelfPosition` is set to; the setting still
+governs the capture hotkey, the bar icon and `omadrop open`.
+
+**To shelve the current selection, use the capture hotkey.** It behaves exactly as before.
+
+> **Upgrading:** run `omarchy-restart-shell` after updating. Shaking uses a new IPC verb, and
+> that is only registered on a full shell restart — without it a shake silently does nothing.
+
+### Fixed
+
+**Key synthesis no longer leaves a key stuck.** `ydotool` injects press and release as
+separate kernel events, so an interrupted sequence left the key held for the entire desktop,
+not just for OmaDrop. One user's `c` key stuck and required a reboot. A held letter also
+drops file managers into type-ahead find, where Ctrl+C copies the search box instead of the
+selection — which is how a stuck key turned into captures that silently found nothing. Keys
+are now released before the copy, after it, and on exit even if the script is killed.
+
 ## [1.2.6] — 2026-08-26
 
 ### Fixed
@@ -86,6 +118,7 @@ DropArea treated it as "back home" and restored the snapshot.
 Initial release. Floating dropzone for Omarchy inspired by Dropover: shake the mouse over a file
 selection (or press a hotkey) to collect files into a shelf, then drag them out anywhere.
 
+[1.3.0]: https://github.com/lucascnunes/omadrop/releases/tag/v1.3.0
 [1.2.6]: https://github.com/lucascnunes/omadrop/releases/tag/v1.2.6
 [1.2.5]: https://github.com/lucascnunes/omadrop/releases/tag/v1.2.5
 [1.2.1]: https://github.com/lucascnunes/omadrop/releases/tag/v1.2.1
