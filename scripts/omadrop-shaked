@@ -66,7 +66,10 @@ def build_parser():
     p.add_argument("--max-drift", type=float, default=240.0, help="net px over the window to still be 'in place'")
     p.add_argument("--drift-ratio", type=float, default=0.38, help="net/path ratio ceiling (oscillation guard)")
     p.add_argument("--cooldown-ms", type=int, default=1600)
-    p.add_argument("--command", default="omarchy-shell omadrop capture")
+    # A shake opens the shelf; it does not capture. Auto-shelving whatever was
+    # selected fired on accidental shakes and required synthesizing Ctrl+C on
+    # every one. The capture hotkey remains for the deliberate case.
+    p.add_argument("--command", default="omarchy-shell omadrop shake")
     p.add_argument("--log", default="")
     return p
 

@@ -356,6 +356,23 @@ Item {
     root.probeAndShow()
   }
 
+  // A shake OPENS the shelf and stops there — it never captures on its own.
+  //
+  // Shaking is easy to do by accident, and grabbing whatever happened to be
+  // selected made the gesture feel like it fired at random. It also forced a
+  // synthetic Ctrl+C on every shake, which is both invasive and the path that
+  // could leave a key stuck at the uinput layer (see capture-selection.sh).
+  // Now the shelf simply appears and waits for the user to drag files in —
+  // including files already in flight, since a layer surface mapped under an
+  // in-flight drag does receive the drag (.planning/spikes/001).
+  //
+  // Always at the cursor, whatever shelfPosition says: the point of the
+  // gesture is a drop target under the hand that made it. shelfPosition still
+  // governs the hotkey, the bar icon and `omadrop open`.
+  function shakeOpen() {
+    root.probeAndShow("cursor")
+  }
+
   function close() {
     root.opened = false
   }
@@ -385,7 +402,11 @@ Item {
     onExited: root.applyGeometry(geomOut.text)
   }
 
-  function probeAndShow() {
+  // Set for a single probeAndShow() call, consumed by applyGeometry().
+  property string pendingPosition: ""
+
+  function probeAndShow(positionOverride) {
+    root.pendingPosition = String(positionOverride || "")
     geomProbe.command = ["bash", "-c",
       'echo "{\\"cursor\\":$(hyprctl cursorpos -j),\\"monitors\\":$(hyprctl monitors -j)}"']
     geomProbe.running = true
@@ -407,7 +428,8 @@ Item {
     } : null
 
     var pos = ShelfModel.shelfAnchor(
-      root.settings.shelfPosition, monitor, cursor,
+      root.pendingPosition !== "" ? root.pendingPosition : root.settings.shelfPosition,
+      monitor, cursor,
       shelfWindow.cardWidth,
       shelfWindow.cardHeightPx > 0 ? shelfWindow.cardHeightPx : shelfWindow.cardEstimatedHeight,
       shelfWindow.edgeMargin
@@ -416,6 +438,7 @@ Item {
     shelfWindow.anchorY = Math.round(pos.y)
     if (monitor && monitor.name) shelfWindow.useScreen(String(monitor.name))
 
+    root.pendingPosition = ""
     root.opened = true
   }
 
@@ -498,6 +521,7 @@ Item {
 
     function ping(): string { return "pong" }
     function capture(): void { root.runCapture("auto") }
+    function shake(): void { root.shakeOpen() }
     function clip(): void { root.runCapture("clipboard") }
     function open(): void { root.openShelf("shelf") }
     function close(): void { root.dismiss() }
