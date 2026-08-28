@@ -130,6 +130,7 @@ SettingsPanel.qml        popout de configurações + histórico sob o ícone da 
 ShelfModel.js            lógica pura (URIs, dedupe, serialização) testável em node
 Strings.js               i18n (en/pt); callers passam settings.language para tLang()
 scripts/capture-selection.sh   clipboard snapshot → wtype → uri-list → restore
+scripts/read-shelf-state      leitor seguro e limitado (sem links/arquivos especiais)
 scripts/omadrop-shaked         daemon Python (~80 Hz via socket1 do Hyprland)
 tests/shelf-model-test.js      node tests/shelf-model-test.js
 CHANGELOG.md             histórico de releases (inglês)

@@ -2,6 +2,15 @@
 
 All notable changes to OmaDrop. Versions follow [semantic versioning](https://semver.org/).
 
+## [1.3.1] — 2026-08-28
+
+### Fixed
+
+**State reads no longer follow replaceable paths into blocking files.** Every `shelf.json`
+reader now opens the path without following symlinks and in nonblocking mode, verifies the
+opened descriptor is a regular file, and reads no more than the existing byte ceiling plus
+one. A hard deadline remains around the shared helper as defense in depth.
+
 ## [1.3.0] — 2026-08-27
 
 ### Changed
