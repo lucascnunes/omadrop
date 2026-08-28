@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "lucas.omadrop",
   "name": "OmaDrop",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "author": "Lucas Nunes",
   "description": "Floating Dropover-style dropzone: shake the mouse over a file selection (or use a shortcut) to stash it in the shelf and drag it anywhere later.",
   "kinds": [

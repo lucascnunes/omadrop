@@ -107,8 +107,9 @@ Item {
     stateReader.running = true
   }
 
-  // Atomic write through bash: JSON travels as an argv slot, never through a
-  // shell-parsed string; mktemp+mv keeps partial writes unreachable.
+  // The helper opens the state directory without following symlinks, creates
+  // a restrictive temporary file relative to that descriptor, and atomically
+  // replaces only a regular destination relative to the same descriptor.
   Process {
     id: stateWriter
     stderr: StdioCollector {
@@ -135,9 +136,7 @@ Item {
     root._writing = true
     root._pendingWrite = ""
     stateWriter.command = [
-      "bash", "-c",
-      'd=$(dirname -- "$1"); mkdir -p "$d"; tmp=$(mktemp "$d/.shelf.XXXXXX") && printf \'%s\' "$2" >"$tmp" && mv "$tmp" "$1"',
-      "omadrop-state", root.statePath, json
+      "python3", root.scriptPath("write-shelf-state"), root.statePath, json
     ]
     stateWriter.running = true
   }

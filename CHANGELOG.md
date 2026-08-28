@@ -2,6 +2,16 @@
 
 All notable changes to OmaDrop. Versions follow [semantic versioning](https://semver.org/).
 
+## [1.3.2] — 2026-08-28
+
+### Fixed
+
+**State writes can no longer be redirected by replaceable paths.** The writer now opens the
+state directory without following symlinks, creates its private temporary file relative to that
+verified directory descriptor, rejects non-regular destinations, and atomically replaces
+`shelf.json` relative to the same descriptor. Directory swaps during a write can no longer send
+the state or replacement somewhere else.
+
 ## [1.3.1] — 2026-08-28
 
 ### Fixed
@@ -127,6 +137,8 @@ DropArea treated it as "back home" and restored the snapshot.
 Initial release. Floating dropzone for Omarchy inspired by Dropover: shake the mouse over a file
 selection (or press a hotkey) to collect files into a shelf, then drag them out anywhere.
 
+[1.3.2]: https://github.com/lucascnunes/omadrop/releases/tag/v1.3.2
+[1.3.1]: https://github.com/lucascnunes/omadrop/releases/tag/v1.3.1
 [1.3.0]: https://github.com/lucascnunes/omadrop/releases/tag/v1.3.0
 [1.2.6]: https://github.com/lucascnunes/omadrop/releases/tag/v1.2.6
 [1.2.5]: https://github.com/lucascnunes/omadrop/releases/tag/v1.2.5
