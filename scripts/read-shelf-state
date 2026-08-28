@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Safely emit a bounded shelf state from a regular file."""
+
+import os
+import stat
+import sys
+
+
+def main() -> int:
+    if len(sys.argv) != 3:
+        return 2
+
+    path = sys.argv[1]
+    try:
+        limit = int(sys.argv[2])
+    except ValueError:
+        return 2
+    if limit < 0:
+        return 2
+
+    flags = os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags)
+    except FileNotFoundError:
+        return 0
+    except OSError:
+        return 2
+
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return 2
+
+        remaining = limit + 1
+        chunks = []
+        while remaining:
+            chunk = os.read(fd, min(remaining, 64 * 1024))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+    except OSError:
+        return 2
+    finally:
+        os.close(fd)
+
+    try:
+        sys.stdout.buffer.write(b"".join(chunks))
+        sys.stdout.buffer.flush()
+    except BrokenPipeError:
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

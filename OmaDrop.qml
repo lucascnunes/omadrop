@@ -72,9 +72,9 @@ Item {
     root.state = ShelfModel.deserializeState(text)
   }
 
-  // Read through a byte-bounded `head` rather than FileView: shelf.json is
-  // user-writable and FileView has no size limit, so an oversized file would
-  // land in the shell whole. One byte past the cap keeps "too big" detectable.
+  // The helper opens shelf.json without following symlinks, in nonblocking
+  // mode, and accepts only a regular file. One byte past the cap keeps "too
+  // big" detectable without collecting an unbounded file in the shell.
   // The panel owns writes and nothing else mutates the file behind us, so a
   // single read at startup is all this needs.
   Process {
@@ -84,7 +84,8 @@ Item {
       waitForEnd: true
     }
     stderr: StdioCollector {}
-    onExited: {
+    onExited: function(exitCode) {
+      if (exitCode !== 0) return
       var text = stateReaderOut.text || ""
       if (ShelfModel.isOversizedState(text)) {
         // Refuse it, and do NOT write over it — a state this big is not ours,
@@ -100,8 +101,9 @@ Item {
   }
 
   function loadState() {
-    stateReader.command = ["bash", "-c", 'head -c "$1" -- "$0" 2>/dev/null || true',
-                           root.statePath, String(ShelfModel.STATE_BYTES_MAX + 1)]
+    stateReader.command = ["timeout", "--signal=KILL", "1s", "python3",
+                           root.scriptPath("read-shelf-state"), root.statePath,
+                           String(ShelfModel.STATE_BYTES_MAX)]
     stateReader.running = true
   }
 

@@ -17,6 +17,11 @@ Panel {
   property var anchorItem: null
   property var hostWidget: null
 
+  function scriptPath(name) {
+    var url = Qt.resolvedUrl("scripts/" + name).toString()
+    return url.indexOf("file://") === 0 ? url.slice("file://".length) : url
+  }
+
   moduleName: "lucas.omadrop"
   manageIpc: false // IPC lives on the panel entry (omadrop target)
 
@@ -60,15 +65,18 @@ Panel {
       waitForEnd: true
     }
     stderr: StdioCollector {}
-    onExited: root.stateText = pollOut.text || ""
+    onExited: function(exitCode) {
+      root.stateText = exitCode === 0 ? (pollOut.text || "") : ""
+    }
   }
 
   function pollState() {
     var home = Quickshell.env("HOME") || ""
     var path = (Quickshell.env("XDG_STATE_HOME") || (home + "/.local/state")) + "/omadrop/shelf.json"
-    // Same byte bound as every other shelf.json reader — see ShelfModel.STATE_BYTES_MAX.
-    statePoll.command = ["bash", "-c", 'head -c "$1" -- "$0" 2>/dev/null || true',
-                         path, String(ShelfModel.STATE_BYTES_MAX + 1)]
+    // Same descriptor-safe helper and hard deadline as every other reader.
+    statePoll.command = ["timeout", "--signal=KILL", "1s", "python3",
+                         root.scriptPath("read-shelf-state"), path,
+                         String(ShelfModel.STATE_BYTES_MAX)]
     statePoll.running = true
   }
 

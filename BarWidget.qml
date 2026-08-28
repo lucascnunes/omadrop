@@ -25,6 +25,11 @@ BarWidget {
   readonly property string homeDir: Quickshell.env("HOME") || ""
   readonly property string statePath: (Quickshell.env("XDG_STATE_HOME") || (homeDir + "/.local/state")) + "/omadrop/shelf.json"
 
+  function scriptPath(name) {
+    var url = Qt.resolvedUrl("scripts/" + name).toString()
+    return url.indexOf("file://") === 0 ? url.slice("file://".length) : url
+  }
+
   property int itemCount: 0
 
   // ---- settings ---------------------------------------------------------------
@@ -41,7 +46,9 @@ BarWidget {
       waitForEnd: true
     }
     stderr: StdioCollector {}
-    onExited: root.itemCount = ShelfModel.countActiveItemsText(counterOut.text)
+    onExited: function(exitCode) {
+      root.itemCount = exitCode === 0 ? ShelfModel.countActiveItemsText(counterOut.text) : 0
+    }
   }
 
   readonly property string uiLanguage: ShelfModel.normalizeSettings(settings).language
@@ -49,11 +56,10 @@ BarWidget {
   readonly property string barTooltip: Strings.tLang(root.uiLanguage, "barTooltip")
 
   function recount() {
-    // Byte-bounded on the producer side: shelf.json is user-writable, and an
-    // oversized one must never be collected whole into the shell. Reading one
-    // byte past the cap keeps "too big" detectable (ShelfModel refuses it).
-    counter.command = ["bash", "-c", 'head -c "$1" -- "$0" 2>/dev/null || true',
-                       root.statePath, String(ShelfModel.STATE_BYTES_MAX + 1)]
+    // The shared helper rejects symlinks and non-regular files before reading.
+    counter.command = ["timeout", "--signal=KILL", "1s", "python3",
+                       root.scriptPath("read-shelf-state"), root.statePath,
+                       String(ShelfModel.STATE_BYTES_MAX)]
     counter.running = true
   }
 
