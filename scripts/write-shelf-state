@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Atomically write shelf state through one verified directory descriptor."""
+
+import os
+import secrets
+import stat
+import sys
+
+
+DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+
+
+def open_parent(path: str) -> tuple[int, str]:
+    if not os.path.isabs(path):
+        raise ValueError("state path must be absolute")
+
+    parent, name = os.path.split(os.path.normpath(path))
+    if not name:
+        raise ValueError("state path must name a file")
+
+    fd = os.open(os.sep, DIRECTORY_FLAGS)
+    try:
+        for component in parent.split(os.sep):
+            if not component:
+                continue
+            try:
+                child_fd = os.open(component, DIRECTORY_FLAGS, dir_fd=fd)
+            except FileNotFoundError:
+                try:
+                    os.mkdir(component, 0o700, dir_fd=fd)
+                except FileExistsError:
+                    pass
+                child_fd = os.open(component, DIRECTORY_FLAGS, dir_fd=fd)
+            os.close(fd)
+            fd = child_fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+    try:
+        if not stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise ValueError("state parent is not a directory")
+
+        # OmaDrop owns this final directory; do not leave state accessible to
+        # other users when upgrading from the old mkdir-based writer.
+        os.fchmod(fd, 0o700)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd, name
+
+
+def validate_destination(parent_fd: int, name: str) -> None:
+    try:
+        destination = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(destination.st_mode):
+        raise ValueError("existing state destination is not a regular file")
+
+
+def write_state(path: str, contents: str) -> None:
+    parent_fd, name = open_parent(path)
+    temporary_name = ""
+    temporary_fd = -1
+    try:
+        validate_destination(parent_fd, name)
+
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW
+        for _ in range(100):
+            temporary_name = f".shelf.{secrets.token_hex(8)}.tmp"
+            try:
+                temporary_fd = os.open(
+                    temporary_name, flags, 0o600, dir_fd=parent_fd
+                )
+                os.fchmod(temporary_fd, 0o600)
+                break
+            except FileExistsError:
+                temporary_name = ""
+        else:
+            raise FileExistsError("could not create a unique temporary file")
+
+        data = contents.encode("utf-8")
+        view = memoryview(data)
+        while view:
+            written = os.write(temporary_fd, view)
+            if written == 0:
+                raise OSError("short write to temporary state file")
+            view = view[written:]
+        os.fsync(temporary_fd)
+        os.close(temporary_fd)
+        temporary_fd = -1
+
+        # Recheck immediately before replacement. Even if the name changes
+        # after this check, replaceat-style semantics never follow its target.
+        validate_destination(parent_fd, name)
+        os.replace(
+            temporary_name,
+            name,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+        )
+        temporary_name = ""
+        os.fsync(parent_fd)
+    finally:
+        if temporary_fd >= 0:
+            os.close(temporary_fd)
+        if temporary_name:
+            try:
+                os.unlink(temporary_name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+        os.close(parent_fd)
+
+
+def main() -> int:
+    if len(sys.argv) != 3:
+        return 2
+    previous_umask = os.umask(0o077)
+    try:
+        write_state(sys.argv[1], sys.argv[2])
+    except (OSError, ValueError) as error:
+        print(f"write-shelf-state: {error}", file=sys.stderr)
+        return 2
+    finally:
+        os.umask(previous_umask)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
