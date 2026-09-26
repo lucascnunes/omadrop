@@ -42,8 +42,10 @@ Item {
   // react on the click itself.
   property var localSettingsOverride: null
   readonly property var pluginEntry: {
-    var cfg = shell ? shell.shellConfig : null
-    return cfg ? ShelfModel.findBarEntry(cfg, root.moduleId) : null
+    // Third-party plugins get PluginShellApi, which exposes barConfig (kept in
+    // sync with shell.json) but not shellConfig.
+    var bar = shell ? shell.barConfig : null
+    return bar ? ShelfModel.findBarEntry({ bar: bar }, root.moduleId) : null
   }
   readonly property var settings: ShelfModel.normalizeSettings(localSettingsOverride || pluginEntry)
   // Reactive language for toasts / zone: passed into Strings.tLang so bindings
