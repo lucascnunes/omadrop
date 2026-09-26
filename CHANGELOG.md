@@ -2,6 +2,18 @@
 
 All notable changes to OmaDrop. Versions follow [semantic versioning](https://semver.org/).
 
+## [1.3.3] — 2026-09-26
+
+### Fixed
+
+**Settings are applied again.** The panel read its entry from `shell.shellConfig`, which the
+shell does not expose to third-party plugins — only `barConfig` is. Every setting silently fell
+back to its default, so turning off "Open a shelf on mouse shake" left the detector running,
+and `shakeReversals`, `shelfPosition`, `language` and `showNotifications` were ignored as well.
+Settings now come from `barConfig` and follow `shell.json` live.
+
+> Run `omarchy-restart-shell` after updating if the change does not take effect.
+
 ## [1.3.2] — 2026-08-28
 
 ### Fixed
