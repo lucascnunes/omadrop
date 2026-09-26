@@ -23,7 +23,9 @@ Panel {
   }
 
   moduleName: "lucas.omadrop"
-  manageIpc: false // IPC lives on the panel entry (omadrop target)
+  // Shelf verbs live on the panel entry (omadrop target). This target only
+  // lets that separate instance open the popout (see OmaDrop.routeToSettingsPopout).
+  ipcTarget: "omadrop-settings"
 
   // Optimistic settings echo so controls react before shell.json round-trips.
   property var localSettingsOverride: null
