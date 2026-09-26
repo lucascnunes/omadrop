@@ -89,7 +89,25 @@ t("guessKind buckets common extensions", function() {
   eq(M.guessKind("song.flac"), "audio")
   eq(M.guessKind("relatório.pdf"), "pdf")
   eq(M.guessKind("backup.tar.gz"), "archive")
+  eq(M.guessKind("arch.iso"), "disk")
+  eq(M.guessKind("main.rs"), "code")
+  eq(M.guessKind("shell.json"), "config")
+  eq(M.guessKind("contrato.docx"), "doc")
+  eq(M.guessKind("gastos.csv"), "sheet")
+  eq(M.guessKind("pitch.key"), "slides")
+  eq(M.guessKind("Inter.woff2"), "font")
+  eq(M.guessKind("livro.epub"), "ebook")
   eq(M.guessKind("semext"), "file")
+})
+
+t("deserializeState re-derives stale kinds but keeps folders and links", function() {
+  var st = M.deserializeState(JSON.stringify({ version: 1, activeShelfId: "s", shelves: [{
+    id: "s", createdAt: 1, updatedAt: 1, archivedAt: null, items: [
+      { uri: "file:///a/main.rs", path: "/a/main.rs", name: "main.rs", kind: "text" },
+      { uri: "file:///a/proj.js", path: "/a/proj.js", name: "proj.js", kind: "dir" },
+      { uri: "https://x.dev", path: null, name: "x.dev", kind: "link" }
+    ] }] }))
+  eq(M.activeShelf(st).items.map(function(i) { return i.kind }), ["code", "dir", "link"])
 })
 
 // ---------------------------------------------------------------------------
@@ -384,6 +402,22 @@ t("deserializeState refuses an oversized state instead of parsing it", function(
 
 t("countActiveItemsText reports zero for an oversized state", function() {
   eq(M.countActiveItemsText("x".repeat(M.STATE_BYTES_MAX + 1)), 0)
+})
+
+// Folder detection
+
+t("markDirs flags folders that arrived without a trailing slash", function() {
+  var st = M.emptyState()
+  M.addItems(st, ["file:///home/u/projeto.js", "file:///home/u/notas.txt", "https://x.dev/"])
+  var items = M.activeShelf(st).items
+  eq(items[0].kind, "code", "extension guess before the stat")
+  eq(M.uncheckedLocalPaths(st), ["/home/u/projeto.js", "/home/u/notas.txt"], "links are never statted")
+
+  ok(M.markDirs(st, ["/home/u/projeto.js"]), "reports a change")
+  eq(items[0].kind, "dir")
+  eq(items[1].kind, "text", "files keep their kind")
+  eq(M.uncheckedLocalPaths(st), ["/home/u/notas.txt"], "folders are not re-checked")
+  ok(!M.markDirs(st, ["/home/u/projeto.js"]), "idempotent")
 })
 
 // ---------------------------------------------------------------------------

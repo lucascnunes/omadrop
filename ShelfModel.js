@@ -147,9 +147,17 @@ var KIND_EXTENSIONS = {
   video: ["mp4", "mkv", "webm", "mov", "avi", "m4v"],
   audio: ["mp3", "flac", "wav", "ogg", "oga", "m4a", "opus"],
   pdf: ["pdf"],
-  archive: ["zip", "tar", "gz", "tgz", "rar", "7z", "xz", "bz2", "zst", "iso"],
-  text: ["txt", "md", "json", "csv", "log", "xml", "yml", "yaml", "js", "ts", "py", "rs", "go", "c", "cpp", "h", "sh", "lua", "toml", "ini", "conf"],
-  doc: ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "pages", "numbers", "key"]
+  archive: ["zip", "tar", "gz", "tgz", "rar", "7z", "xz", "bz2", "zst"],
+  disk: ["iso", "img", "dmg"],
+  text: ["txt", "md", "log", "rst"],
+  code: ["js", "jsx", "ts", "tsx", "py", "rs", "go", "c", "cpp", "h", "hpp", "java", "kt", "rb", "php",
+         "swift", "cs", "sh", "bash", "zsh", "fish", "lua", "qml", "html", "css", "scss", "sql"],
+  config: ["json", "xml", "yml", "yaml", "toml", "ini", "conf", "env"],
+  doc: ["doc", "docx", "odt", "rtf", "pages"],
+  sheet: ["xls", "xlsx", "ods", "csv", "tsv", "numbers"],
+  slides: ["ppt", "pptx", "odp", "key"],
+  font: ["ttf", "otf", "woff", "woff2"],
+  ebook: ["epub", "mobi", "azw3"]
 }
 
 // Exact extension lookup (substring matching would turn ".c" into an image).
@@ -235,7 +243,11 @@ function sanitizeShelf(raw) {
         uri: it.uri,
         path: typeof it.path === "string" ? it.path : null,
         name: typeof it.name === "string" && it.name !== "" ? it.name : baseName(it.path || it.uri),
-        kind: typeof it.kind === "string" ? it.kind : "file",
+        // Re-derive from the name so shelves saved before a kind existed
+        // pick up its icon; only the stat result ("dir") and links persist.
+        kind: it.kind === "dir" ? "dir"
+              : (typeof it.path !== "string" ? "link"
+                 : guessKind(typeof it.name === "string" && it.name !== "" ? it.name : baseName(it.path))),
         // Guard with typeof: isFinite(null) is true, which would turn a
         // stored null into epoch-zero.
         addedAt: finiteOr(it.addedAt, Date.now())
@@ -442,6 +454,40 @@ function repointMovedPath(state, oldPath, newPath) {
         it.uri = pathToUri(newPath)
         it.name = baseName(newPath)
         shelf.updatedAt = Date.now()
+        changed = true
+      }
+    }
+  }
+  return changed
+}
+
+// Folders dropped from file managers arrive as file:///dir with no trailing
+// slash, so makeItem cannot tell them apart; the panel stats these paths and
+// feeds the directories back through markDirs.
+function uncheckedLocalPaths(state) {
+  var out = []
+  if (!state || !Array.isArray(state.shelves)) return out
+  for (var s = 0; s < state.shelves.length; s++) {
+    var items = state.shelves[s] && state.shelves[s].items
+    if (!Array.isArray(items)) continue
+    for (var i = 0; i < items.length; i++)
+      if (items[i] && items[i].path && items[i].kind !== "dir") out.push(items[i].path)
+  }
+  return out
+}
+
+function markDirs(state, dirPaths) {
+  if (!state || !Array.isArray(state.shelves) || !Array.isArray(dirPaths)) return false
+  var dirs = {}
+  for (var d = 0; d < dirPaths.length; d++) dirs[dirPaths[d]] = true
+  var changed = false
+  for (var s = 0; s < state.shelves.length; s++) {
+    var items = state.shelves[s] && state.shelves[s].items
+    if (!Array.isArray(items)) continue
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i]
+      if (it && it.path && dirs[it.path] === true && it.kind !== "dir") {
+        it.kind = "dir"
         changed = true
       }
     }
@@ -669,6 +715,8 @@ if (typeof module !== "undefined" && module.exports) {
     removeItemByPath: removeItemByPath,
     clearActive: clearActive,
     repointMovedPath: repointMovedPath,
+    uncheckedLocalPaths: uncheckedLocalPaths,
+    markDirs: markDirs,
     repointItemsPath: repointItemsPath,
     archiveSnapshot: archiveSnapshot,
     archiveCurrent: archiveCurrent,
