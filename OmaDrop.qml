@@ -336,12 +336,20 @@ Item {
   // shells that predate the payload contract.
   // Settings/history live in the bar widget's popout (SettingsPanel.qml);
   // summoning them routes there instead of opening the floating zone.
-  function routeToSettingsPopout() {
-    if (shell && shell.bar && typeof shell.bar.summonBarWidget === "function") {
-      shell.bar.summonBarWidget(root.moduleId)
-      return true
+  // Third-party plugins get no handle on the bar (shell.bar is a scalar
+  // snapshot) and shell.summon on a hybrid plugin lands back here, so the
+  // popout is reached through its own IPC target.
+  Process {
+    id: settingsOpener
+    stderr: StdioCollector {
+      onStreamFinished: if (text && text !== "") console.warn("omadrop settings:", text)
     }
-    return false
+  }
+
+  function routeToSettingsPopout() {
+    settingsOpener.command = ["omarchy-shell", "omadrop-settings", "open"]
+    settingsOpener.running = true
+    return true
   }
 
   function openSettingsPopout() { root.routeToSettingsPopout() }

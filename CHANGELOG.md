@@ -2,6 +2,19 @@
 
 All notable changes to OmaDrop. Versions follow [semantic versioning](https://semver.org/).
 
+## [1.3.4] — 2026-09-26
+
+### Fixed
+
+**The gear on the shelf opens the settings again.** It asked the bar to summon the widget's
+popout, but third-party plugins only get a scalar snapshot of the bar, so the call silently did
+nothing. `omarchy-shell omadrop settings` had the same fault and opened the shelf instead. The
+popout now exposes its own IPC target, `omadrop-settings` (`open`, `close`, `toggle`), and both
+paths go through it.
+
+> Run `omarchy-restart-shell` after updating: the new IPC target is only registered on a full
+> shell restart.
+
 ## [1.3.3] — 2026-09-26
 
 ### Fixed
