@@ -96,6 +96,7 @@ Item {
         return
       }
       root.adoptState(text)
+      root.probeDirs()
       // First boot (missing or empty file): materialize a valid state file so
       // every later read is clean.
       if (text === "") root.saveState()
@@ -141,6 +142,34 @@ Item {
       "python3", root.scriptPath("write-shelf-state"), root.statePath, json
     ]
     stateWriter.running = true
+  }
+
+  // ---- folder detection -------------------------------------------------------
+  // Dropped folders usually arrive without a trailing slash, so the model
+  // guesses from the name; stat the paths and flip real directories to "dir".
+  Process {
+    id: dirProbe
+    stdout: StdioCollector {
+      id: dirProbeOut
+      waitForEnd: true
+    }
+    stderr: StdioCollector {}
+    onExited: {
+      var dirs = (dirProbeOut.text || "").split("\u0000").filter(function(p) { return p !== "" })
+      if (ShelfModel.markDirs(root.state, dirs)) root.commitState()
+      if (root._probeAgain) root.probeDirs()
+    }
+  }
+  property bool _probeAgain: false
+
+  function probeDirs() {
+    if (dirProbe.running) { root._probeAgain = true; return }
+    root._probeAgain = false
+    var paths = ShelfModel.uncheckedLocalPaths(root.state)
+    if (paths.length === 0) return
+    dirProbe.command = ["bash", "-c", 'for p; do [ -d "$p" ] && printf "%s\\0" "$p"; done; true',
+                        "omadrop"].concat(paths)
+    dirProbe.running = true
   }
 
   // ---- move tracking ----------------------------------------------------------
@@ -230,6 +259,7 @@ Item {
 
     var outcome = ShelfModel.addItems(root.state, res.paths, { maxItems: root.settings.maxItems })
     root.commitState()
+    root.probeDirs()
 
     if (outcome.added > 0) {
       if (root.settings.showNotifications) {
@@ -258,6 +288,7 @@ Item {
     var before = root.itemCount
     ShelfModel.addItems(root.state, strings, { maxItems: root.settings.maxItems })
     root.commitState()
+    root.probeDirs()
     var addedCount = root.itemCount - before
     if (addedCount > 0 && !silent && root.settings.showNotifications)
       root.notify("OmaDrop", Strings.tLang(root.uiLanguage, "toastDroppedMany").replace("%1", String(addedCount)))

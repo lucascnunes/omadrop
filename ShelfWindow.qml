@@ -185,17 +185,29 @@ Item {
     stderr: StdioCollector {}
   }
 
+  // Material Design file-* family where it has a glyph, so tiles share one
+  // silhouette. Not "package": its obvious glyph is the OmaDrop logo.
+  readonly property var kindGlyphs: ({
+    dir: "󰉋",      // folder
+    image: "󰈟",    // file-image
+    video: "󰈫",    // file-video
+    audio: "󰈣",    // file-music
+    pdf: "󰈦",      // file-pdf-box
+    archive: "󰗄",  // zip-box
+    disk: "󰗮",     // disc
+    text: "󰈙",     // file-document
+    code: "󰈮",     // file-code
+    config: "󱁻",   // file-cog
+    doc: "󰈬",      // file-word
+    sheet: "󰱾",    // file-table
+    slides: "󰈩",   // file-presentation-box
+    font: "󰛖",     // format-font
+    ebook: "󱓷",    // book-open-variant
+    link: "󰌹"      // link-variant
+  })
+
   function glyphForKind(kind) {
-    if (kind === "dir") return "󰉋"
-    if (kind === "image") return "󰈟"
-    if (kind === "video") return "󰈫"
-    if (kind === "audio") return "󰎈"
-    if (kind === "pdf") return "󰈦"
-    if (kind === "archive") return "󰀪"
-    if (kind === "text") return "󰈙"
-    if (kind === "doc") return "󰈚"
-    if (kind === "link") return "󰌹"
-    return "󰈔"
+    return kindGlyphs[kind] || "󰈔" // file
   }
 
   // ---- the layer window -------------------------------------------------------

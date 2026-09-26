@@ -2,6 +2,27 @@
 
 All notable changes to OmaDrop. Versions follow [semantic versioning](https://semver.org/).
 
+## [1.4.0] — 2026-09-26
+
+### Added
+
+**An icon for each kind of file.** Tiles now tell apart code, config, spreadsheets,
+presentations, disk images, fonts and ebooks, instead of folding them into "text" or
+"document". Every icon comes from the same Material Design `file-*` family, so tiles share
+one silhouette. Images still show their preview; the icon is only the fallback.
+
+Shelves saved before this release pick up the new icons on load: the kind is re-derived from
+the file name, and only folders and links keep their stored kind.
+
+### Fixed
+
+**Folders show the folder icon.** File managers send folders as `file:///path/folder` with no
+trailing slash, so a folder was classified by its name — `projeto.js` became a text file. The
+panel now checks the added paths on disk and marks real directories.
+
+**Archives no longer look like warnings.** `.zip` and friends used an alert triangle glyph;
+they now use `zip-box`. Audio and documents moved into the `file-*` family as well.
+
 ## [1.3.4] — 2026-09-26
 
 ### Fixed
